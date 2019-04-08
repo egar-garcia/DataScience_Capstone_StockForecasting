@@ -126,52 +126,6 @@ save(dow_jones_historical_records, file = dow_jones_dataframe_filename)
 #load(file = dow_jones_dataframe_filename)
 
 
-#-----------------------------------
-# Trading days management
-#-----------------------------------
-
-#' Market holidays loaded from file 'market_holidays.csv' 
-market_holidays <- read.csv('market_holidays.csv') %>%
-  mutate(date = as.Date(date, format='%Y-%m-%d'))
-
-
-#' Getting the trading days existing in a date range.
-#'
-#' @param from_date The starting date of the range.
-#' @param datetime to_date The ending date of the range.
-#' @return A list of the trading days in the specified date range.
-get_trading_days_in_range <- function(from_date, to_date) {
-  data.frame('date' = seq(from_date, to_date, 'days')) %>% # Sequene of dates in the range
-    filter(!(wday(date) %in% c(1, 7))) %>% # Filtering by weekdays (Mon to Fri)
-    anti_join(market_holidays, by = 'date')  # Removing holidays
-}
-
-
-#' Getting a specific number of trading days after a given date.
-#'
-#' @param after_date The date after which training days are going to be retrieved.
-#' @param num_trading_days The number of training days to get.
-#' @return A list containing the trading days.
-get_trading_days_after <- function(after_date, no_trading_days) {
-  trading_days <- data.frame(date = as.Date(character()))
-  counter <- 0
-  current_date <- after_date
-
-  # Getting each day after the given date till getting 
-  # the requested number of days
-  while (counter < no_trading_days) {
-    current_date <- current_date + ddays(1)
-
-    # If not in a weekend nor a holiday adding the date to the set of trading days
-    if (!(wday(current_date) %in% c(1, 7) | current_date %in% market_holidays$date)) {
-      counter <- counter + 1
-      trading_days[counter,] <- c(current_date)
-    }
-  }
-  
-  trading_days
-}
-
 
 #-----------------------------------
 # Visualization
@@ -230,3 +184,77 @@ dow_jones_historical_records %>%
   theme(legend.position = 'none')
 
 
+
+#-----------------------------------
+# Trading days management
+#-----------------------------------
+
+#' Market holidays loaded from file 'market_holidays.csv' 
+market_holidays <- read.csv('market_holidays.csv') %>%
+  mutate(date = as.Date(date, format='%Y-%m-%d'))
+
+
+#' Getting the trading days existing in a date range.
+#'
+#' @param from_date The starting date of the range.
+#' @param datetime to_date The ending date of the range.
+#' @return A list of the trading days in the specified date range.
+get_trading_days_in_range <- function(from_date, to_date) {
+  data.frame('date' = seq(from_date, to_date, 'days')) %>% # Sequene of dates in the range
+    filter(!(wday(date) %in% c(1, 7))) %>% # Filtering by weekdays (Mon to Fri)
+    anti_join(market_holidays, by = 'date')  # Removing holidays
+}
+
+
+#' Getting a specific number of trading days after a given date.
+#'
+#' @param after_date The date after which training days are going to be retrieved.
+#' @param num_trading_days The number of training days to get.
+#' @return A list containing the trading days.
+get_trading_days_after <- function(after_date, no_trading_days) {
+  trading_days <- data.frame(date = as.Date(character()))
+  counter <- 0
+  current_date <- after_date
+  
+  # Getting each day after the given date till getting 
+  # the requested number of days
+  while (counter < no_trading_days) {
+    current_date <- current_date + ddays(1)
+    
+    # If not in a weekend nor a holiday adding the date to the set of trading days
+    if (!(wday(current_date) %in% c(1, 7) | current_date %in% market_holidays$date)) {
+      counter <- counter + 1
+      trading_days[counter,] <- c(current_date)
+    }
+  }
+  
+  trading_days
+}
+
+
+#-----------------------------------
+# Training and validation sets
+#-----------------------------------
+
+get_train_and_validation_set <- function(
+  historical_prices, stock_symbol, start_training, end_training, validation_days) {
+
+  df <- historical_prices %>%
+    filter(symbol == stock_symbol) %>%
+    select(date, close)
+
+  training_set <- df %>%
+    filter(date >= start_training & date <= end_training)
+
+  validation_days <- get_trading_days_after(end_training, max(validation_days))
+  validation_set <- df %>%
+    filter(date >= min(validation_days$date) & date <= max(validation_days$date))
+
+  list(training_set, validation_set)
+}
+
+x <- get_train_and_validation_set(dow_jones_historical_records,
+                                  'AAPL',
+                                  as.Date('2015-07-01', '%Y-%m-%d'),
+                                  as.Date('2018-06-30', '%Y-%m-%d'),
+                                  c(60))
