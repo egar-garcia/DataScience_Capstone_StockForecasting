@@ -6,6 +6,7 @@ library(tidyr)
 library(tidyverse)
 library(dplyr)
 library(data.table)
+library(lubridate)
 
 
 djia_tickers = c(
@@ -147,9 +148,64 @@ forecast(fit, 10)
 if(!require(prophet)) install.packages('prophet')
 library(prophet)
 
-prophet_model <- setnames(aapl_df, old = c('date', 'close'), new = c('ds', 'y')) %>%
+prophet_model <- aapl_df %>%
+  setnames(old = c('date', 'close'), new = c('ds', 'y')) %>%
   prophet(daily.seasonality = TRUE)
 
+future <- make_future_dataframe(prophet_model, periods = 60)
+forecast <- predict(prophet_model, future)
+plot(prophet_model, forecast)
+
+
+#--------------------------------
+
+market_holidays <- read.csv('market_holidays.csv') %>%
+  mutate(date = as.Date(date, format='%Y-%m-%d'))
+
+get_trading_days_in_range <- function(start_date, end_date) {
+  data.frame('date' = seq(start_date, end_date, 'days')) %>%
+    filter(!(wday(date) %in% c(1, 7))) %>%
+    anti_join(market_holidays, by = 'date')
+}
+
+get_trading_days_after <- function(after_date, no_trading_days) {
+  trading_days <- data.frame(date = as.Date(character()))
+  counter <- 0
+  current_date <- after_date
+  while (counter < no_trading_days) {
+    current_date <- current_date + ddays(1)
+    #print(current_date)
+    if (!(wday(current_date) %in% c(1, 7) | current_date %in% market_holidays$date)) {
+      #print(current_date)
+      counter <- counter + 1
+      trading_days[counter,] <- c(current_date)
+    }
+  }
+
+  trading_days
+}
+
+#x <- get_trading_days_in_range(as.Date('2019-04-01', '%Y-%m-%d'), as.Date('2019-05-30', '%Y-%m-%d'))
+
+#--------------------------------
+
+stock_symbol <- 'AAPL'
+start_training <- as.Date('2015-07-01', '%Y-%m-%d')
+end_training <- as.Date('2018-06-30', '%Y-%m-%d')
+end_validation <- as.Date('2018-09-30', '%Y-%m-%d')
+
+training_df <- djia_historical_records %>%
+  filter(symbol == stock_symbol & date >= start_training & date <= end_training) %>%
+  select(date, close)
+
+validation_df <- djia_historical_records %>%
+  filter(symbol == stock_symbol & date > end_training & date <= end_validation) %>%
+  select(date, close)
+
+
+ggplot() +
+  geom_line(data = training_df, aes(x = date, y = close), color = 'blue') +
+  geom_line(data = validation_df, aes(x = date, y = close), color = 'red')
 
 #--------------------------------
 #--------------------------------
@@ -167,3 +223,5 @@ load(file="djia_stock_records_2014-04-04_2019-04-03.Rda")
 load(file="djia_stock_records_2014-04-07_2019-04-04.Rda")
 
 djia_historical_records <- update_djia_dataframe(djia_historical_records)
+
+x <- read.csv('dow_jones_tickers.csv')
