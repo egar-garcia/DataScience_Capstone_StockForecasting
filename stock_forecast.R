@@ -7,6 +7,9 @@ if(!require(jsonlite)) install.packages('jsonlite')
 if(!require(ggcorrplot)) install.packages('ggcorrplot')
 if(!require(directlabels)) install.packages('directlabels')
 
+if(!require(forecast)) install.packages('forecast')
+if(!require(prophet)) install.packages('prophet')
+
 library(tidyr)
 library(tidyverse)
 library(dplyr)
@@ -15,6 +18,9 @@ library(lubridate)
 library(ggplot2)
 library(ggcorrplot)
 library(directlabels)
+
+library(forecast)
+library(prophet)
 
 
 #-----------------------------------
@@ -236,25 +242,166 @@ get_trading_days_after <- function(after_date, no_trading_days) {
 # Training and validation sets
 #-----------------------------------
 
-get_train_and_validation_set <- function(
-  historical_prices, stock_symbol, start_training, end_training, validation_days) {
+#' Extract training and validation sets from a given data set.
+#' The training set is created with records in the given date range
+#' for the training. The validation set is created with records 
+#' from the day after the training day and to the date in which 
+#' the number of requested validation days is covered with trading days.
+#'
+#' @param historical_prices The dataset of stock historical prices used 
+#'    to extract the training and validation sets from.
+#' @param ticker_symbol The ticker symbol to perform predictions for.
+#' @param start_training The minimum date for the records used in the training set.
+#' @param end_training The maximum date for the records used in the training set.
+#' @param validation_days The number of trading days after end_training
+#'    used to create the validation set.
+get_train_and_validation_sets <- function(
+  historical_prices, ticker_symbol, start_training, end_training, validation_days) {
 
+  # Filtering the data set to only contains the records related to the
+  # given ticker symbol
   df <- historical_prices %>%
-    filter(symbol == stock_symbol) %>%
+    filter(symbol == ticker_symbol) %>%
     select(date, close)
 
+  # Getting the training set
   training_set <- df %>%
     filter(date >= start_training & date <= end_training)
 
-  validation_days <- get_trading_days_after(end_training, max(validation_days))
+  # Getting the specific dates for validation whic size is validation_days
+  validation_days <- get_trading_days_after(end_training, validation_days)
+
+  # Getting the validation set
   validation_set <- df %>%
     filter(date >= min(validation_days$date) & date <= max(validation_days$date))
 
-  list(training_set, validation_set)
+  list(training = training_set, validation = validation_set)
 }
 
-x <- get_train_and_validation_set(dow_jones_historical_records,
-                                  'AAPL',
-                                  as.Date('2015-07-01', '%Y-%m-%d'),
-                                  as.Date('2018-06-30', '%Y-%m-%d'),
-                                  c(60))
+
+#' Gets a dataframe containing a subset of the records of the current dataset,
+#' which is obtained by filtering by a ticker symbol and/or a date range.
+#' 
+#' @param ticker_symbol The ticker symbol to filter the data.
+#' @param from_date The minimum date to appear in the records of the subset.
+#' @param to_date The maximum date to appear in the records of the subset.
+#' @return The dataframe with the subset resulted of filtering the dataset.
+filter_historical_prices <- function(historical_prices, 
+                                     ticker_symbol = NULL,
+                                     start_date = NULL, end_date = NULL) {
+  df <- historical_prices
+
+  # Filtering by ticker symbol if exists
+  if (!is.null(ticker_symbol)) {
+    df <- df %>% filter(symbol == ticker_symbol)
+  }
+  # Filtering by start date if exists
+  if (!is.null(start_date)) {
+    df <- df %>% filter(date >= start_date)
+  }
+  # Filtering by end date if exists
+  if (!is.null(end_date)) {
+    df <- df %>% filter(date <= end_date)
+  }
+
+  df
+}
+
+
+#-----------------------------------
+# Models
+#-----------------------------------
+
+LinearRegressionStockForecaster <- function(
+  base_dataset, ticker_symbol, start_date = NULL, end_date = NULL) {
+
+  model <- list()
+
+  model$ticker_symbol <- ticker_symbol
+
+  training_set <- filter_historical_prices(
+    base_dataset, model$ticker_symbol, start_date, end_date) %>%
+    select(date, close)
+
+  model$model <- lm(close~date, training_set)
+
+  model$predict <- function(from_date, to_date) {
+    trading_days <- get_trading_days_in_range(from_date, to_date)
+    preds <- predict(model$model, trading_days)
+    data.frame(date = trading_days, close = preds)
+  }
+
+  model
+}
+
+
+ArimaStockForecaster <- function(
+  base_dataset, ticker_symbol, start_date = NULL, end_date = NULL) {
+  
+  model <- list()
+  
+  model$ticker_symbol <- ticker_symbol
+
+  training_set <- filter_historical_prices(
+    base_dataset, model$ticker_symbol, start_date, end_date) %>%
+    select(date, close)
+
+  model$model <- auto.arima(
+    training_set %>% column_to_rownames(var = 'date') %>% .$close,
+    D = 1)
+
+  model$predict <- function(from_date, to_date) {
+    trading_days <- get_trading_days_in_range(from_date, to_date)
+    preds <- forecast(model$model, nrow(trading_days))$mean
+    data.frame(date = trading_days, close = preds)
+  }
+
+  model
+}
+
+
+ProphetStockForecaster <- function(
+  base_dataset, ticker_symbol, start_date = NULL, end_date = NULL) {
+  
+  model <- list()
+  
+  model$ticker_symbol <- ticker_symbol
+  
+  training_set <- filter_historical_prices(
+    base_dataset, model$ticker_symbol, start_date, end_date) %>%
+    select(date, close) %>%
+    setnames(old = c('date', 'close'), new = c('ds', 'y'))
+
+  model$model <- prophet(training_set, daily.seasonality = TRUE)
+
+  model$predict <- function(from_date, to_date) {
+    trading_days <- get_trading_days_in_range(from_date, to_date) %>%
+      setnames(old = c('date'), new = c('ds'))
+    preds <- predict(model$model, trading_days)$yhat
+    data.frame(date = trading_days$ds, close = preds)
+  }
+
+  model
+}
+
+
+#-----------------------------------
+# https://www.datascience.com/blog/stock-price-time-series-arima
+
+sets <- get_train_and_validation_sets(dow_jones_historical_records,
+                                      'BA',
+                                      as.Date('2015-07-01', '%Y-%m-%d'),
+                                      as.Date('2018-06-30', '%Y-%m-%d'),
+                                      c(100))
+
+#m <- LinearRegressionStockForecaster(
+#m <- ArimaStockForecaster(
+m <- ProphetStockForecaster(
+  dow_jones_historical_records,
+  'BA', min(sets$training$date), max(sets$training$date))
+preds <- m$predict(min(sets$validation$date), max(sets$validation$date))
+
+ggplot() +
+  geom_line(data = sets$training, aes(x = date, y = close), color = 'blue') +
+  geom_line(data = sets$validation, aes(x = date, y = close), color = 'green') +
+  geom_line(data = preds, aes(x = date, y = close), color = 'red')
