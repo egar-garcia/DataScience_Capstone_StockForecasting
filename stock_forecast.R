@@ -6,9 +6,12 @@ if(!require(httr)) install.packages('httr')
 if(!require(jsonlite)) install.packages('jsonlite')
 if(!require(ggcorrplot)) install.packages('ggcorrplot')
 if(!require(directlabels)) install.packages('directlabels')
+if(!require(caret)) install.packages('caret')
 
 if(!require(forecast)) install.packages('forecast')
 if(!require(prophet)) install.packages('prophet')
+if(!require(keras)) install.packages('keras')
+
 
 library(tidyr)
 library(tidyverse)
@@ -18,10 +21,13 @@ library(lubridate)
 library(ggplot2)
 library(ggcorrplot)
 library(directlabels)
+library(caret)
 
 library(forecast)
-library(prophet)
+library(keras)
 
+# Install Keras if you have not installed before
+install_keras()
 
 #-----------------------------------
 # Dataset management
@@ -206,6 +212,10 @@ market_holidays <- read.csv('market_holidays.csv') %>%
 #' @param datetime to_date The ending date of the range.
 #' @return A list of the trading days in the specified date range.
 get_trading_days_in_range <- function(from_date, to_date) {
+  if (from_date > to_date) {
+    stop('Invalid date range')
+  }
+
   data.frame('date' = seq(from_date, to_date, 'days')) %>% # Sequene of dates in the range
     filter(!(wday(date) %in% c(1, 7))) %>% # Filtering by weekdays (Mon to Fri)
     anti_join(market_holidays, by = 'date')  # Removing holidays
@@ -312,77 +322,212 @@ filter_historical_prices <- function(historical_prices,
 # Models
 #-----------------------------------
 
+#' This function represents a constructor 
+#' for a stock forecaster model based on Linear Regression.
+#'
+#' @param base_dataset The dataframe used to extract the training set
+#'    in accordance with the date range. 
+#' @param ticker_symbol The ticker symbol to perform predictions for.
+#' @param training_start The minimum date for the records used in the training set.
+#' @param training_end The maximum date for the records used in the training set.
+#' @return The model based on Linear Regression
 LinearRegressionStockForecaster <- function(
-  base_dataset, ticker_symbol, start_date = NULL, end_date = NULL) {
+  base_dataset, ticker_symbol, training_start = NULL, training_end = NULL) {
 
   model <- list()
 
-  model$ticker_symbol <- ticker_symbol
-
+  # Extracting the training set from the base dataset,
+  # i.e. filtering by ticker symbol and date range
   training_set <- filter_historical_prices(
-    base_dataset, model$ticker_symbol, start_date, end_date) %>%
+    base_dataset, ticker_symbol, training_start, training_end) %>%
     select(date, close)
 
+  # Fitting a Linear Regression model where
+  # 'date' is the predictor and 'close' is the predicted value
   model$model <- lm(close~date, training_set)
 
-  model$predict <- function(from_date, to_date) {
+  #' The predicting function
+  #'
+  #' @param from_date The initial date of the date range to predict.
+  #' @param to_date The final date of the date range to predict.
+  #' @return A dataframe containing the dates in the range to predict
+  #'    with their respective predicted closing price.
+  model$predict <- function(from_date, to_date = NULL) {
+    # If final date is null, then using the initial date, i.e predicting for 1 day
+    if (is.null(to_date)) {
+      to_date = from_date
+    }
+
+    # Getting a dataframe containing the trading days to make predictions for
     trading_days <- get_trading_days_in_range(from_date, to_date)
+    # Getting the predicted stock closing values
     preds <- predict(model$model, trading_days)
-    data.frame(date = trading_days, close = preds)
+    # Creating the dataframe with the predicted values per trading day
+    data.frame(date = trading_days$date, close = preds)
   }
 
   model
 }
 
 
+#' This function represents a constructor 
+#' for a stock forecaster model based on ARIMA.
+#'
+#' @param base_dataset The dataframe used to extract the training set
+#'    in accordance with the date range. 
+#' @param ticker_symbol The ticker symbol to perform predictions for.
+#' @param training_start The minimum date for the records used in the training set.
+#' @param training_end The maximum date for the records used in the training set.
+#' @return The model based on ARIMA
 ArimaStockForecaster <- function(
-  base_dataset, ticker_symbol, start_date = NULL, end_date = NULL) {
-  
-  model <- list()
-  
-  model$ticker_symbol <- ticker_symbol
+  base_dataset, ticker_symbol, training_start = NULL, training_end = NULL) {
 
+  model <- list()
+
+  # Extracting the training set from the base dataset,
+  # i.e. filtering by ticker symbol and date range
   training_set <- filter_historical_prices(
-    base_dataset, model$ticker_symbol, start_date, end_date) %>%
+    base_dataset, ticker_symbol, training_start, training_end) %>%
     select(date, close)
 
+  # Keeping track of the training end date
+  model$training_end <- max(training_set$date)
+
+  # Fitting an ARIMA model
+  # (using auto.arima which automatically tunes the parameters)
+  # to predict it takes a time series containing the stock closing prices
   model$model <- auto.arima(
     training_set %>% column_to_rownames(var = 'date') %>% .$close,
     D = 1)
 
-  model$predict <- function(from_date, to_date) {
-    trading_days <- get_trading_days_in_range(from_date, to_date)
-    preds <- forecast(model$model, nrow(trading_days))$mean
-    data.frame(date = trading_days, close = preds)
+  #' The predicting function
+  #'
+  #' @param from_date The initial date of the date range to predict.
+  #' @param to_date The final date of the date range to predict.
+  #' @return A dataframe containing the dates in the range to predict
+  #'    with their respective predicted closing price.
+  model$predict <- function(from_date, to_date = NULL) {
+    # If final date is null, then using the initial date, i.e predicting for 1 day
+    if (is.null(to_date)) {
+      to_date = from_date
+    }
+    # Checking that date range is valid
+    if (from_date > to_date) {
+      stop('Invalid date range')
+    }
+    # Checking that prediction range is after training
+    if (from_date < model$training_end) {
+      stop('Prediction range should be after training')
+    }
+
+    # Getting a dataframe containing the trading days to make predictions for,
+    # including the days that might be missing after the end of training
+    # and the begining of the predicting range
+    trading_days <- get_trading_days_in_range(model$training_end + ddays(1), to_date)
+    # Getting the predicted stock closing values
+    preds <- forecast(model$model, nrow(trading_days))
+    # Creating the dataframe with the predicted values per trading day
+    # and filtering to include just the trading days in the given range
+    data.frame(date = trading_days, close = preds$mean) %>%
+      filter(date >= from_date)
   }
 
   model
 }
 
 
+#' This function represents a constructor 
+#' for a stock forecaster model based on Prophet.
+#'
+#' @param base_dataset The dataframe used to extract the training set
+#'    in accordance with the date range. 
+#' @param ticker_symbol The ticker symbol to perform predictions for.
+#' @param training_start The minimum date for the records used in the training set.
+#' @param training_end The maximum date for the records used in the training set.
+#' @return The model based on Prophet
 ProphetStockForecaster <- function(
   base_dataset, ticker_symbol, start_date = NULL, end_date = NULL) {
-  
+
   model <- list()
-  
-  model$ticker_symbol <- ticker_symbol
-  
+
+  # Extracting the training set from the base dataset)
+  # (i.e. filtering by ticker symbol and date range),
+  # and changing the column names to 'ds' and 'y' which are the ones Prophet uses
   training_set <- filter_historical_prices(
-    base_dataset, model$ticker_symbol, start_date, end_date) %>%
+    base_dataset, ticker_symbol, start_date, end_date) %>%
     select(date, close) %>%
     setnames(old = c('date', 'close'), new = c('ds', 'y'))
 
+  # Fitting an Prophet model
   model$model <- prophet(training_set, daily.seasonality = TRUE)
 
-  model$predict <- function(from_date, to_date) {
+  #' The predicting function
+  #'
+  #' @param from_date The initial date of the date range to predict.
+  #' @param to_date The final date of the date range to predict.
+  #' @return A dataframe containing the dates in the range to predict
+  #'    with their respective predicted closing price.
+  model$predict <- function(from_date, to_date = NULL) {
+    # If final date is null, then using the initial date, i.e predicting for 1 day
+    if (is.null(to_date)) {
+      to_date = from_date
+    }
+
+    # Getting a dataframe containing the trading days to make predictions for,
+    # and changing the column name to 'ds' which is the one Prophet uses
     trading_days <- get_trading_days_in_range(from_date, to_date) %>%
       setnames(old = c('date'), new = c('ds'))
-    preds <- predict(model$model, trading_days)$yhat
-    data.frame(date = trading_days$ds, close = preds)
+    # Getting the predicted stock closing values
+    preds <- predict(model$model, trading_days)
+    # Creating the dataframe with the predicted values per trading day
+    data.frame(date = trading_days$ds, close = preds$yhat)
   }
 
   model
 }
+
+
+LongShortTermMemoryStockForecaster <- function(
+  base_dataset, ticker_symbol, start_date = NULL, end_date = NULL) {
+
+  model <- list()
+
+  model$ticker_symbol <- ticker_symbol
+
+  model$timesteps <- 60
+  model$epochs <- 2
+
+  # Extracting the training set from the base dataset)
+  # i.e. filtering by ticker symbol and date range.
+  model$training_set <- filter_historical_prices(
+    base_dataset, model$ticker_symbol, start_date, end_date) %>%
+    select(date, close)
+
+  model$scale_factor <- max(model$training_set$close) * 2.0
+
+  train_X <- t(sapply((model$timesteps + 1): nrow(model$training_set),
+                      function(i) {
+                        model$training_set$close[(i - model$timesteps) : (i - 1)]
+                      }))
+  train_X <- train_X / model$scale_factor
+  dim(train_X) <- c(dim(train_X)[1], dim(train_X)[2], 1)
+
+  train_Y <- model$training_set$close[(model$timesteps + 1) : nrow(model$training_set)]
+  train_Y <- train_Y / model$scale_factor
+
+  model$model <- keras_model_sequential() %>%
+    layer_lstm(units = 50, return_sequences = TRUE,
+               input_shape = c(model$timesteps, 1)) %>%
+    layer_lstm(units = 50) %>%
+    layer_dense(1) %>%
+    compile(loss = 'mean_squared_error', optimizer = 'adam')
+
+  model$training_history <- model$model %>%
+    fit(x = train_X, y = train_Y, epochs = model$epochs, batch_size = 1, verbose = 2)
+
+  model
+}
+
 
 
 #-----------------------------------
@@ -392,16 +537,57 @@ sets <- get_train_and_validation_sets(dow_jones_historical_records,
                                       'BA',
                                       as.Date('2015-07-01', '%Y-%m-%d'),
                                       as.Date('2018-06-30', '%Y-%m-%d'),
-                                      c(100))
+                                      c(120))
 
 #m <- LinearRegressionStockForecaster(
-#m <- ArimaStockForecaster(
-m <- ProphetStockForecaster(
+m <- ArimaStockForecaster(
+#m <- ProphetStockForecaster(
+#m <- LongShortTermMemoryStockForecaster(
   dow_jones_historical_records,
   'BA', min(sets$training$date), max(sets$training$date))
 preds <- m$predict(min(sets$validation$date), max(sets$validation$date))
+preds2 <- m$predict(min(sets$validation$date) + ddays(30), max(sets$validation$date))
+#preds3 <- m$predict(max(sets$validation$date) + ddays(30), max(sets$validation$date))
+
+ggplot() +
+  #expand_limits(y = 0) +
+  geom_line(data = sets$training, aes(x = date, y = close), color = 'blue') +
+  #geom_ribbon(data = preds, aes(x = date, ymax = close_upper, ymin = close_lower), alpha = 0.5, fill = "skyblue") +
+  geom_line(data = sets$validation, aes(x = date, y = close), color = 'green') +
+  geom_line(data = preds, aes(x = date, y = close), color = 'red') +
+  geom_line(data = preds2, aes(x = date, y = close), color = 'black')
+  #geom_line(data = preds, aes(x = as.Date(ds), y = yhat), color = 'red') +
+  #geom_line(data = preds, aes(x = as.Date(ds), y = trend), color = 'black') +
+  #geom_ribbon(data = preds, aes(x = as.Date(ds), ymax = yhat_upper, ymin = yhat_lower), alpha = 0.5, fill = "skyblue")
+
+y = predict(m$model, sets$training %>% setnames(old = c('date'), new = c('ds')))
+
+#-----------------------------------
+
+
+timesteps <- 60
+
+#tx <- t(sapply(1 : (nrow(sets$training) - timesteps + 1),
+#              function(i) sets$training$close[i : (i +  timesteps - 1)]))
+
+tx <- t(sapply((timesteps + 1): nrow(sets$training),
+               function(i) sets$training$close[(i - timesteps) : (i - 1)]))
+dim(tx) <- c(dim(tx)[1], dim(tx)[2], 1)
+tx <- tx / 400.0
+
+ty <- sets$training$close[(timesteps + 1) : nrow(sets$training)]
+ty <- ty / 400.0
+
+m <- keras_model_sequential() %>%
+  layer_lstm(units = 50, return_sequences = TRUE, input_shape = c(timesteps, 1)) %>%
+  layer_lstm(units = 50) %>%
+  layer_dense(1) %>%
+  compile(loss='mean_squared_error', optimizer='adam')
+
+mh <- m %>%  fit(x = tx, y = ty, epochs = 1, batch_size = 1, verbose = 2)
+
+y <- predict(m, tx)
 
 ggplot() +
   geom_line(data = sets$training, aes(x = date, y = close), color = 'blue') +
-  geom_line(data = sets$validation, aes(x = date, y = close), color = 'green') +
-  geom_line(data = preds, aes(x = date, y = close), color = 'red')
+  geom_line(aes(x = tail(sets$training$date, -60), y = y*400.0), color = 'red')
