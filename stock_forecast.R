@@ -2,12 +2,12 @@
 # Required packages and libraries
 #-----------------------------------
 
+if(!require(tidyverse)) install.packages('tidyverse')
 if(!require(httr)) install.packages('httr')
 if(!require(jsonlite)) install.packages('jsonlite')
 if(!require(ggcorrplot)) install.packages('ggcorrplot')
 if(!require(directlabels)) install.packages('directlabels')
 if(!require(caret)) install.packages('caret')
-
 if(!require(forecast)) install.packages('forecast')
 if(!require(prophet)) install.packages('prophet')
 if(!require(keras)) install.packages('keras')
@@ -21,13 +21,16 @@ library(lubridate)
 library(ggplot2)
 library(ggcorrplot)
 library(directlabels)
+library(httr)
+library(jsonlite)
 library(caret)
-
 library(forecast)
 library(keras)
 
 # Install Keras if you have not installed before
 install_keras()
+
+
 
 #-----------------------------------
 # Dataset management
@@ -123,11 +126,65 @@ update_dow_jones_dataframe <- function(historical_prices) {
 dow_jones_dataframe_filename <- 'dow_jones_dataframe.Rda'
 
 
+#-----------------------------------
+# Trading days management
+#-----------------------------------
+
+#' Market holidays loaded from file 'market_holidays.csv' 
+market_holidays <- read.csv('market_holidays.csv') %>%
+  mutate(date = as.Date(date, format='%Y-%m-%d'))
+
+
+#' Getting the trading days existing in a date range.
+#'
+#' @param from_date The starting date of the range.
+#' @param datetime to_date The ending date of the range.
+#' @return A list of the trading days in the specified date range.
+get_trading_days_in_range <- function(from_date, to_date) {
+  # Checking if the data range is valid
+  if (from_date > to_date) {
+    stop('Invalid date range')
+  }
+  
+  data.frame('date' = seq(from_date, to_date, 'days')) %>% # Sequene of dates in the range
+    filter(!(wday(date) %in% c(1, 7))) %>% # Filtering by weekdays (Mon to Fri)
+    anti_join(market_holidays, by = 'date')  # Removing holidays
+}
+
+
+#' Getting a specific number of trading days after a given date.
+#'
+#' @param after_date The date after which training days are going to be retrieved.
+#' @param num_trading_days The number of training days to get.
+#' @return A list containing the trading days.
+get_trading_days_after <- function(after_date, no_trading_days) {
+  trading_days <- data.frame(date = as.Date(character()))
+  counter <- 0
+  current_date <- after_date
+  
+  # Getting each day after the given date till getting 
+  # the requested number of days
+  while (counter < no_trading_days) {
+    current_date <- current_date + ddays(1)
+    
+    # If not in a weekend nor a holiday adding the date to the set of trading days
+    if (!(wday(current_date) %in% c(1, 7) | current_date %in% market_holidays$date)) {
+      counter <- counter + 1
+      trading_days[counter,] <- c(current_date)
+    }
+  }
+  
+  trading_days
+}
+
+
+#--------------------
 # Examples of usage
+#--------------------
 
 # Creating a new dataset
-dow_jones_historical_records <- get_dow_jones_dataframe()
-save(dow_jones_historical_records, file = dow_jones_dataframe_filename)
+#dow_jones_historical_records <- get_dow_jones_dataframe()
+#save(dow_jones_historical_records, file = dow_jones_dataframe_filename)
 
 # Loading, updating and saving the dataset
 #load(file = dow_jones_dataframe_filename)
@@ -135,7 +192,7 @@ save(dow_jones_historical_records, file = dow_jones_dataframe_filename)
 #save(dow_jones_historical_records, file = dow_jones_dataframe_filename)
 
 # Loading dataset
-#load(file = dow_jones_dataframe_filename)
+load(file = dow_jones_dataframe_filename)
 
 
 
@@ -154,7 +211,6 @@ dow_jones_historical_records %>%
   labs(colour = '') +
   theme(legend.position = 'bottom') +
   geom_dl(aes(label = symbol), method = 'angled.boxes')
-  #geom_dl(aes(label = symbol), method = list(dl.trans(x = x + 0.1), 'maxvar.points'))
 
 
 # Plotting in grey the historical prices of all the 30 companies
@@ -198,57 +254,6 @@ dow_jones_historical_records %>%
 
 
 #-----------------------------------
-# Trading days management
-#-----------------------------------
-
-#' Market holidays loaded from file 'market_holidays.csv' 
-market_holidays <- read.csv('market_holidays.csv') %>%
-  mutate(date = as.Date(date, format='%Y-%m-%d'))
-
-
-#' Getting the trading days existing in a date range.
-#'
-#' @param from_date The starting date of the range.
-#' @param datetime to_date The ending date of the range.
-#' @return A list of the trading days in the specified date range.
-get_trading_days_in_range <- function(from_date, to_date) {
-  if (from_date > to_date) {
-    stop('Invalid date range')
-  }
-
-  data.frame('date' = seq(from_date, to_date, 'days')) %>% # Sequene of dates in the range
-    filter(!(wday(date) %in% c(1, 7))) %>% # Filtering by weekdays (Mon to Fri)
-    anti_join(market_holidays, by = 'date')  # Removing holidays
-}
-
-
-#' Getting a specific number of trading days after a given date.
-#'
-#' @param after_date The date after which training days are going to be retrieved.
-#' @param num_trading_days The number of training days to get.
-#' @return A list containing the trading days.
-get_trading_days_after <- function(after_date, no_trading_days) {
-  trading_days <- data.frame(date = as.Date(character()))
-  counter <- 0
-  current_date <- after_date
-  
-  # Getting each day after the given date till getting 
-  # the requested number of days
-  while (counter < no_trading_days) {
-    current_date <- current_date + ddays(1)
-    
-    # If not in a weekend nor a holiday adding the date to the set of trading days
-    if (!(wday(current_date) %in% c(1, 7) | current_date %in% market_holidays$date)) {
-      counter <- counter + 1
-      trading_days[counter,] <- c(current_date)
-    }
-  }
-  
-  trading_days
-}
-
-
-#-----------------------------------
 # Training and validation sets
 #-----------------------------------
 
@@ -271,8 +276,7 @@ get_train_and_validation_sets <- function(
   # Filtering the data set to only contains the records related to the
   # given ticker symbol
   df <- historical_prices %>%
-    filter(symbol == ticker_symbol) %>%
-    select(date, close)
+    filter(symbol == ticker_symbol)
 
   # Getting the training set
   training_set <- df %>%
@@ -355,7 +359,7 @@ LinearRegressionStockForecaster <- function(
   model$predict <- function(from_date, to_date = NULL) {
     # If final date is null, then using the initial date, i.e predicting for 1 day
     if (is.null(to_date)) {
-      to_date = from_date
+      to_date <- from_date
     }
 
     # Getting a dataframe containing the trading days to make predictions for
@@ -409,14 +413,14 @@ ArimaStockForecaster <- function(
   model$predict <- function(from_date, to_date = NULL) {
     # If final date is null, then using the initial date, i.e predicting for 1 day
     if (is.null(to_date)) {
-      to_date = from_date
+      to_date <- from_date
     }
     # Checking that date range is valid
     if (from_date > to_date) {
       stop('Invalid date range')
     }
     # Checking that prediction range is after training
-    if (from_date < model$training_end) {
+    if (from_date <= model$training_end) {
       stop('Prediction range should be after training')
     }
 
@@ -470,7 +474,7 @@ ProphetStockForecaster <- function(
   model$predict <- function(from_date, to_date = NULL) {
     # If final date is null, then using the initial date, i.e predicting for 1 day
     if (is.null(to_date)) {
-      to_date = from_date
+      to_date <- from_date
     }
 
     # Getting a dataframe containing the trading days to make predictions for,
@@ -502,6 +506,9 @@ LongShortTermMemoryStockForecaster <- function(
   model$training_set <- filter_historical_prices(
     base_dataset, model$ticker_symbol, start_date, end_date) %>%
     select(date, close)
+
+  # Keeping track of the training end date
+  model$training_end <- max(training_set$date)
 
   model$scale_factor <- max(model$training_set$close) * 2.0
 
@@ -540,9 +547,9 @@ sets <- get_train_and_validation_sets(dow_jones_historical_records,
                                       c(120))
 
 #m <- LinearRegressionStockForecaster(
-m <- ArimaStockForecaster(
+#m <- ArimaStockForecaster(
 #m <- ProphetStockForecaster(
-#m <- LongShortTermMemoryStockForecaster(
+m <- LongShortTermMemoryStockForecaster(
   dow_jones_historical_records,
   'BA', min(sets$training$date), max(sets$training$date))
 preds <- m$predict(min(sets$validation$date), max(sets$validation$date))
@@ -591,3 +598,70 @@ y <- predict(m, tx)
 ggplot() +
   geom_line(data = sets$training, aes(x = date, y = close), color = 'blue') +
   geom_line(aes(x = tail(sets$training$date, -60), y = y*400.0), color = 'red')
+
+
+p <- function(from_date, to_date = NULL, base_dataset = NULL)  {
+  # If final date is null, then using the initial date, i.e predicting for 1 day
+  if (is.null(to_date)) {
+    to_date <- from_date
+  }
+  # Checking that date range is valid
+  if (from_date > to_date) {
+    stop('Invalid date range')
+  }
+  # Checking that prediction range is after training
+  if (from_date <= m$training_end) {
+    stop('Prediction range should be after training')
+  }
+
+  if (is.null(base_dataset)) {
+    base_dataset <- m$training_set
+  } else {
+    base_dataset <- filter(base_dataset, symbol == m$ticker_symbol)
+  }
+
+  # Getting a dataframe containing the trading days to make predictions for,
+  # including the days that might be missing after the end of training
+  # and the begining of the predicting range
+  trading_days <-
+    get_trading_days_in_range(m$training_end + ddays(1), to_date)$date
+
+  
+  inputs <- tail(filter(base_dataset, date <= m$training_end)$close,
+                 n = m$timesteps)
+  inputs <- inputs / m$scale_factor
+  preds <- c()
+
+  for (i in 1:length(trading_days)) {
+    x <- inputs[i : (i + m$timesteps - 1)]
+    dim(x) <- c(1, m$timesteps, 1)
+    y <- predict(m$model, x)
+    preds[i] <- y * m$scale_factor
+
+    existing_rec <- filter(base_dataset, date == trading_days[i])
+    if (nrow(existing_rec) > 0) {
+      inputs[i + m$timesteps] <- existing_rec$close[1] / m$scale_factor
+    } else {
+      inputs[i + m$timesteps] <- y
+    }
+  }
+
+  data.frame(date = trading_days, close = preds) %>%
+    filter(date >= from_date)
+}
+
+i <- which(sets$training$date == as.Date('2016-07-01', '%Y-%m-%d'))
+sets$training[(i-60):(i-1),]
+x <- c()
+for (i in 1:20) {
+  x[i] <- i * i
+}
+
+preds <- p(as.Date('2018-07-01', '%Y-%m-%d'), as.Date('2018-10-31', '%Y-%m-%d'), dow_jones_historical_records)
+
+ggplot() +
+  geom_line(data = sets$training, aes(x = date, y = close), color = 'blue') +
+  geom_line(data = sets$validation, aes(x = date, y = close), color = 'green') +
+  geom_line(data = preds, aes(x = date, y = close), color = 'red')
+
+
