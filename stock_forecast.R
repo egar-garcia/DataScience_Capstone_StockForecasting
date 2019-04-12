@@ -677,13 +677,19 @@ fp <- function(from_date, to_date = NULL, base_dataset = NULL)  {
 
     if (idx <= m$timesteps) {
       stop('Not enough records to perform predictions')
-    } 
+    }
 
     base_dataset <- base_dataset[(idx - m$timesteps) : nrow(base_dataset),]
   } else {
-    base_dataset <- tail(base_dataset, n = m$timesteps) 
+    base_dataset <- tail(base_dataset, n = m$timesteps)
+
+    if (nrow(base_dataset) <= m$timesteps) {
+      stop('Not enough records to perform predictions')
+    }
   }
 
+  # Getting the missing days (which don't have historical records) 
+  # needed to fulfill the predictions in the given range 
   missing_start <- max(base_dataset$date) + ddays(1)
   if (missing_start <= to_date) {
     missing_days <- get_trading_days_in_range(missing_start, to_date)
@@ -692,6 +698,7 @@ fp <- function(from_date, to_date = NULL, base_dataset = NULL)  {
   }
 
   inputs <- base_dataset$close / m$scale_factor
+
   trading_days <- c()
   preds <- c()
 
@@ -732,7 +739,8 @@ fp <- function(from_date, to_date = NULL, base_dataset = NULL)  {
 }
 
 preds <- p(as.Date('2018-07-01', '%Y-%m-%d'), as.Date('2018-10-31', '%Y-%m-%d'), dow_jones_historical_records)
-preds <- fp(as.Date('2014-04-08', '%Y-%m-%d'), as.Date('2018-10-31', '%Y-%m-%d'), dow_jones_historical_records)
+preds <- fp(as.Date('2018-09-01', '%Y-%m-%d'), as.Date('2018-12-31', '%Y-%m-%d'), dow_jones_historical_records)
+preds <- fp(as.Date('2018-09-01', '%Y-%m-%d'), as.Date('2018-12-31', '%Y-%m-%d'), sets$training)
 
 ggplot() +
   geom_line(data = sets$training, aes(x = date, y = close), color = 'blue') +
