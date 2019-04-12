@@ -532,6 +532,7 @@ LongShortTermMemoryStockForecaster <- function(
   model$training_history <- model$model %>%
     fit(x = train_X, y = train_Y, epochs = model$epochs, batch_size = 1, verbose = 2)
 
+
   model
 }
 
@@ -650,14 +651,88 @@ p <- function(from_date, to_date = NULL, base_dataset = NULL)  {
     filter(date >= from_date)
 }
 
-i <- which(sets$training$date == as.Date('2016-07-01', '%Y-%m-%d'))
-sets$training[(i-60):(i-1),]
-x <- c()
-for (i in 1:20) {
-  x[i] <- i * i
+fp <- function(from_date, to_date = NULL, base_dataset = NULL)  {
+  # If final date is null, then using the initial date, i.e predicting for 1 day
+  if (is.null(to_date)) {
+    to_date <- from_date
+  }
+  # Checking that date range is valid
+  if (from_date > to_date) {
+    stop('Invalid date range')
+  }
+
+  # If not base dataset to support predictions is provided, using the training set
+  if (is.null(base_dataset)) {
+    base_dataset <- m$training_set
+  } else {
+    base_dataset <- filter(base_dataset, symbol == m$ticker_symbol)
+  }
+
+  # Only the records on or before the end date of the prediction range are needed
+  base_dataset <- filter(base_dataset, date <= to_date)
+
+  idx <- which(base_dataset$date >= from_date)
+  if (length(idx) > 0) {
+    idx <- min(idx)
+
+    if (idx <= m$timesteps) {
+      stop('Not enough records to perform predictions')
+    } 
+
+    base_dataset <- base_dataset[(idx - m$timesteps) : nrow(base_dataset),]
+  } else {
+    base_dataset <- tail(base_dataset, n = m$timesteps) 
+  }
+
+  missing_start <- max(base_dataset$date) + ddays(1)
+  if (missing_start <= to_date) {
+    missing_days <- get_trading_days_in_range(missing_start, to_date)
+  } else {
+    missing_days <- NULL
+  }
+
+  inputs <- base_dataset$close / m$scale_factor
+  trading_days <- c()
+  preds <- c()
+
+  count <- 1
+
+  i <- m$timesteps + 1
+  while (i <= nrow(base_dataset)) {
+    trading_days[count] <- base_dataset[i, 'date']
+
+    x <- inputs[(i - m$timesteps) : (i - 1)]
+    dim(x) <- c(1, m$timesteps, 1)
+    y <- predict(m$model, x)
+
+    preds[count] <- y * m$scale_factor
+
+    i <- i + 1
+    count <- count + 1
+  }
+
+  j <- 1
+  while (!is.null(missing_days) && j <= nrow(missing_days)) {
+    trading_days[count] <- missing_days[j, 'date']
+
+    x <- inputs[(length(inputs) - m$timesteps + 1) : length(inputs)]
+    dim(x) <- c(1, m$timesteps, 1)
+    y <- predict(m$model, x)
+
+    inputs[length(inputs) + 1] <- y
+
+    preds[count] <- y * m$scale_factor
+
+    j <- j + 1
+    count <- count + 1
+  }
+
+  data.frame(date = as_date(trading_days), close = preds) %>%
+    filter(date >= from_date)
 }
 
 preds <- p(as.Date('2018-07-01', '%Y-%m-%d'), as.Date('2018-10-31', '%Y-%m-%d'), dow_jones_historical_records)
+preds <- fp(as.Date('2014-04-08', '%Y-%m-%d'), as.Date('2018-10-31', '%Y-%m-%d'), dow_jones_historical_records)
 
 ggplot() +
   geom_line(data = sets$training, aes(x = date, y = close), color = 'blue') +
