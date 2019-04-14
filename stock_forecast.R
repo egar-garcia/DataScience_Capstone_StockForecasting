@@ -47,7 +47,6 @@ djia_symbol <- 'DIA'
 #' from the IEX API.
 iex_api_url_template <- 'https://api.iextrading.com/1.0/stock/%s/chart/%s'
 
-
 #' Retrieves the historic prices for a particuler stock from the data source.
 #'
 #' @param ticker_symbol The ticker symbol or symbols to filter the data.
@@ -69,7 +68,6 @@ get_historical_records <- function(ticker_symbol, hist_period = '5y') {
   historical_prices %>% select(symbol, date, close)
 }
 
-
 #' Gets a dataframe containing historic prices for stocks in
 #' the Dow Jones Industrial Average.
 #'
@@ -90,7 +88,6 @@ get_dow_jones_dataframe <- function(hist_period = '5y') {
 
   historical_prices
 }
-
 
 #' Updates a dataframe containing historic prices for stocks in
 #' the Dow Jones Industrial Average,
@@ -123,6 +120,7 @@ update_dow_jones_dataframe <- function(historical_prices) {
   historical_prices[!duplicated(historical_prices[c('symbol', 'date')]),]
 }
 
+#' The file's name where the dataset is stored.
 dow_jones_dataframe_filename <- 'dow_jones_dataframe.Rda'
 
 
