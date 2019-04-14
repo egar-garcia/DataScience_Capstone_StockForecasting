@@ -8,10 +8,7 @@ if(!require(jsonlite)) install.packages('jsonlite')
 if(!require(ggcorrplot)) install.packages('ggcorrplot')
 if(!require(directlabels)) install.packages('directlabels')
 if(!require(caret)) install.packages('caret')
-#if(!require(gbm)) install.packages('gbm')
-#if(!require(mgcv)) install.packages('mgcv')
 if(!require(nlme)) install.packages('nlme')
-#if(!require(kernlab)) install.packages('kernlab')
 if(!require(forecast)) install.packages('forecast')
 if(!require(prophet)) install.packages('prophet')
 if(!require(keras)) install.packages('keras')
@@ -27,16 +24,12 @@ library(directlabels)
 library(httr)
 library(jsonlite)
 library(caret)
-#library(gbm)
-#library(mgcv)
 library(nlme)
-#library(kernlab)
 library(forecast)
 library(keras)
 
 # Install Keras if you have not installed before
 install_keras()
-
 
 
 #-----------------------------------
@@ -261,24 +254,24 @@ dow_jones_historical_records %>%
 
 
 #-----------------------------------
-# Training and validation sets
+# Training and test sets
 #-----------------------------------
 
-#' Extract training and validation sets from a given data set.
+#' Extract training and test sets from a given data set.
 #' The training set is created with records in the given date range
-#' for the training. The validation set is created with records 
+#' for the training. The test set is created with records 
 #' from the day after the training day and to the date in which 
-#' the number of requested validation days is covered with trading days.
+#' the number of requested test days is covered with trading days.
 #'
 #' @param historical_prices The dataset of stock historical prices used 
-#'    to extract the training and validation sets from.
+#'    to extract the training and test sets from.
 #' @param ticker_symbol The ticker symbol to perform predictions for.
 #' @param start_training The minimum date for the records used in the training set.
 #' @param end_training The maximum date for the records used in the training set.
-#' @param validation_days The number of trading days after end_training
-#'    used to create the validation set.
-get_train_and_validation_sets <- function(
-  historical_prices, ticker_symbol, start_training, end_training, validation_days) {
+#' @param test_days The number of trading days after end_training
+#'    used to create the test set.
+get_train_and_test_sets <- function(
+  historical_prices, ticker_symbol, start_training, end_training, test_days) {
 
   # Filtering the data set to only contains the records related to the
   # given ticker symbol
@@ -289,14 +282,14 @@ get_train_and_validation_sets <- function(
   training_set <- df %>%
     filter(date >= start_training & date <= end_training)
 
-  # Getting the specific dates for validation whic size is validation_days
-  validation_days <- get_trading_days_after(end_training, validation_days)
+  # Getting the specific dates for test which size is 'test_days'
+  test_days <- get_trading_days_after(end_training, test_days)
 
-  # Getting the validation set
-  validation_set <- df %>%
-    filter(date >= min(validation_days$date) & date <= max(validation_days$date))
+  # Getting the test set
+  test_set <- df %>%
+    filter(date >= min(test_days$date) & date <= max(test_days$date))
 
-  list(training = training_set, validation = validation_set)
+  list(training = training_set, test = test_set)
 }
 
 
@@ -332,6 +325,7 @@ filter_historical_prices <- function(historical_prices,
 #-----------------------------------
 # Models
 #-----------------------------------
+
 
 #' This function represents a constructor 
 #' for a stock forecaster model based on Linear Regression.
@@ -372,7 +366,7 @@ LinearRegressionStockForecaster <- function(
     # Getting a dataframe containing the trading days to make predictions for
     trading_days <- get_trading_days_in_range(from_date, to_date)
     # Getting the predicted stock closing values
-    preds <- predict(model$model, trading_days)
+    preds <- predict(model, trading_days)
     # Creating the dataframe with the predicted values per trading day
     data.frame(date = trading_days$date, close = preds)
   }
@@ -423,11 +417,11 @@ GeneralizedAdditiveModelStockForecaster <- function(
     if (is.null(to_date)) {
       to_date <- from_date
     }
-    
+
     # Getting a dataframe containing the trading days to make predictions for
     trading_days <- get_trading_days_in_range(from_date, to_date)
     # Getting the predicted stock closing values
-    preds <- predict(model$model, trading_days)
+    preds <- predict(model, trading_days)
     # Creating the dataframe with the predicted values per trading day
     data.frame(date = trading_days$date, close = preds)
   }
@@ -476,13 +470,77 @@ SupportVectorMachineStockForecaster <- function(
     if (is.null(to_date)) {
       to_date <- from_date
     }
-    
+
     # Getting a dataframe containing the trading days to make predictions for
     trading_days <- get_trading_days_in_range(from_date, to_date)
     # Getting the predicted stock closing values
-    preds <- predict(model$model, trading_days)
+    preds <- predict(model, trading_days)
     # Creating the dataframe with the predicted values per trading day
     data.frame(date = trading_days$date, close = preds)
+  }
+  
+  model
+}
+
+
+#' This function represents a constructor 
+#' for a stock forecaster model based on Moving Average.
+#'
+#' @param base_dataset The dataframe used to extract the training set
+#'    in accordance with the date range. 
+#' @param ticker_symbol The ticker symbol to perform predictions for.
+#' @param training_start The minimum date for the records used in the training set.
+#' @param training_end The maximum date for the records used in the training set.
+#' @param order The order for the moving average.
+#' @return The model based on Moving Average.
+MovingAverageStockForecaster <- function(
+  base_dataset, ticker_symbol, training_start = NULL, training_end = NULL,
+  order = 11) {
+
+  model <- list()
+
+  # Extracting the training set from the base dataset,
+  # i.e. filtering by ticker symbol and date range
+  training_set <- filter_historical_prices(
+    base_dataset, ticker_symbol, training_start, training_end) %>%
+    select(date, close)
+
+  # Keeping track of the training end date
+  model$training_end <- max(training_set$date)
+  
+  # Fitting a Moving Average model
+  model$model <- ma(training_set$close, order = order, centre = TRUE)
+
+  #' The predicting function
+  #'
+  #' @param from_date The initial date of the date range to predict.
+  #' @param to_date The final date of the date range to predict.
+  #' @return A dataframe containing the dates in the range to predict
+  #'    with their respective predicted closing price.
+  model$predict <- function(from_date, to_date = NULL) {
+    # If final date is null, then using the initial date, i.e predicting for 1 day
+    if (is.null(to_date)) {
+      to_date <- from_date
+    }
+    # Checking that date range is valid
+    if (from_date > to_date) {
+      stop('Invalid date range')
+    }
+    # Checking that prediction range is after training
+    if (from_date <= model$training_end) {
+      stop('Prediction range should be after training')
+    }
+    
+    # Getting a dataframe containing the trading days to make predictions for,
+    # including the days that might be missing after the end of training
+    # and the begining of the predicting range
+    trading_days <- get_trading_days_in_range(model$training_end + ddays(1), to_date)
+    # Getting the predicted stock closing values
+    preds <- forecast(model$model, nrow(trading_days))
+    # Creating the dataframe with the predicted values per trading day
+    # and filtering to include just the trading days in the given range
+    data.frame(date = trading_days, close = preds$mean) %>%
+      filter(date >= from_date)
   }
   
   model

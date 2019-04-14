@@ -9,7 +9,8 @@ sets <- get_train_and_validation_sets(dow_jones_historical_records,
 
 #m <- LinearRegressionStockForecaster(
 #m <- GeneralizedAdditiveModelStockForecaster(
-m <- SupportVectorMachineStockForecaster(
+#m <- SupportVectorMachineStockForecaster(
+m <- MovingAverageStockForecaster(
 #m <- ArimaStockForecaster(
 #m <- ProphetStockForecaster(
 #m <- LongShortTermMemoryStockForecaster(
@@ -33,6 +34,7 @@ preds <- m$predict(min(sets$validation$date), max(sets$validation$date))
 
 ggplot() +
   geom_line(data = sets$training, aes(x = date, y = close), color = 'blue') +
+  #geom_smooth(data = sets$training, aes(x = date, y = close)) +
   geom_line(data = sets$validation, aes(x = date, y = close), color = 'green') +
   geom_line(data = preds, aes(x = date, y = close), color = 'red')
   
@@ -49,6 +51,13 @@ ggplot() +
   geom_line(data = preds2, aes(x = date, y = close), color = 'orange')
 
 #-----------------------------------
+
+preds <- sma(sets$training$close,)
+
+ggplot() +
+  geom_line(data = sets$training, aes(x = date, y = close), color = 'blue') +
+  geom_line(aes(x = sets$training$date, y = preds$), color = 'cyan') 
+
 # https://www.datascience.com/blog/stock-price-time-series-arima
 
 sets <- get_train_and_validation_sets(dow_jones_historical_records,
