@@ -4,15 +4,18 @@ author: "Egar Garcia"
 date: "4/13/2019"
 output:
   pdf_document:
-    #toc: true
+    toc: true
+    toc_depth: 2
     number_sections: true
-    fig_width: 4
-    fig_height: 3
+    fig_width: 7
+    fig_height: 4.33
 ---
 
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
+eval_define_dataset_retrieval <- !exists('dow_jones_stocks') | !exists('djia_symbol') | !exists('iex_api_url_template') | !exists('get_historical_records') | !exists('get_dow_jones_dataframe') | !exists('update_dow_jones_dataframe')
 ```
 
 
@@ -122,9 +125,9 @@ The strategy to retrieve the dataset is to get the historical stock price record
 
 For the historical stock price records only the columns `date` and `close` are picked, and one new column `symbol` is added to indicate the ticker symbol of the company which the record belongs to.
 
-The following code is the implementation of the mechanism to retrieve the dataset:
+The following code is the implementation of the mechanism to retrieve the dataset from the IEX API, the main function is `get_dow_jones_dataframe`.
 
-```{r dataset_retrieval}
+```{r dataset_retrieval, eval=eval_define_dataset_retrieval}
 #' Loading the set of ticker symbols of the companies contemplated in
 #' the  Dow Jones Industrial Average.
 dow_jones_stocks <- read.csv('dow_jones_stocks.csv', stringsAsFactors = FALSE)
@@ -181,9 +184,9 @@ get_dow_jones_dataframe <- function(hist_period = '5y') {
 
 The IEX's API only allows to get historical records for a maximum of the previous 5 years, however the management of the dataset does not have to be limited by this constraint, since an old dataset can be updated just by adding the missing records. In this way a mechanism can be implemented to keep data beyond 5 years old and keeping a dataset updated.
 
-The following is the implementation of the function in charge of updating a dataset by adding the missing recent records:
+The following is the implementation of the function `update_dow_jones_dataframe` which is in charge of updating a dataset by adding the missing recent records.
 
-```{r dataset_update}
+```{r dataset_update, eval=eval_define_dataset_retrieval}
 #' Updates a dataframe containing historic prices for stocks in
 #' the Dow Jones Industrial Average,
 #' by retrieving the most recent records from the information source.
@@ -216,13 +219,102 @@ update_dow_jones_dataframe <- function(historical_prices) {
 }
 ```
 
-The following is a variable that specifies the file's name where the dataset is being stored, and which can be periodically updated:
+The following variable `dow_jones_dataframe_filename` specifies the file's name `dow_jones_dataframe.Rda`, which is where the dataset is being stored.
 
-```{r dataset_filename}
+```{r dataset_filename, eval=eval_define_dataset_retrieval}
 #' The file's name where the dataset is stored.
 dow_jones_dataframe_filename <- 'dow_jones_dataframe.Rda'
 ```
 
+### Examples of data retrieval {-}
+
+The following is an example to create a brand new dataset, using the defaul historical period of 5 years back from the current date. Then the dataset is saved to the file `dow_jones_dataframe.Rda`.
+
+```{r brand_new_dataset, eval=FALSE}
+dow_jones_historical_records <- get_dow_jones_dataframe()
+save(dow_jones_historical_records, file = dow_jones_dataframe_filename)
+```
+
+In the following code the dataset is loaded from the file `dow_jones_dataframe.Rda` into the variable `dow_jones_historical_records` (assuming that this was the one previously saved, p.e. by running `save(dow_jones_historical_records, file = dow_jones_dataframe_filename)`), then the dataset is updated by adding the missing recent records, and finally the dataset is saved again in the same file.
+
+```{r load_update_save_dataset, eval=FALSE}
+load(file = dow_jones_dataframe_filename)
+dow_jones_historical_records <-
+  update_dow_jones_dataframe(dow_jones_historical_records)
+save(dow_jones_historical_records, file = dow_jones_dataframe_filename)
+```
+
+The following is an example for just loading and existing dataset from the file `dow_jones_dataframe.Rda` into the variable `dow_jones_historical_records` (assuming that this varaible was previously saved, p.e. by running `save(dow_jones_historical_records, file = dow_jones_dataframe_filename)`).
+
+```{r load_dataset, eval=FALSE}
+load(file = dow_jones_dataframe_filename)
+```
+
 ## Data visualization
 
+The following code generates a visualization in figure \ref{fig:DowJonesHistoric} of the historical closing prices for the 30 stocks of the companies in the Dow Jones, displaying the five years' period up to April 12th, 2019. It displays the prices along the time for all the Dow Jones companies, in addition includes a listing of their respective ticker symbols and names.
 
+```{r historical_records_dow_jones_stocks, echo=TRUE, fig.cap="\\label{fig:DowJonesHistoric} Dow Jones 5 year historic prices", fig.height=9, fig.width=10}
+dow_jones_historical_records %>%
+  filter(symbol != djia_symbol) %>%
+  left_join(dow_jones_stocks, by = 'symbol') %>%
+  select(date, close, symbol, company) %>%
+  ggplot(aes(x = date, y = close, group = symbol,
+             color = sprintf('%s (%s)', symbol, company))) +
+  geom_line(size = 0.3) +
+  labs(colour = '') +
+  theme(legend.position = 'bottom') +
+  geom_dl(aes(label = symbol), method = 'angled.boxes')
+```
+
+The following code generates the visualization in figure \ref{fig:DowJonesHistoricVsDJIA}, which is a comparison with the actual Dow Jones Industrial Average index (highlighted in black).
+
+```{r historical_stocks_contrast_djia, echo=TRUE, fig.cap="\\label{fig:DowJonesHistoricVsDJIA} Dow Jones stoks in contrast with the Dow Jones Industrial Average index", fig.height=6, fig.width=10}
+dow_jones_historical_records %>%
+  mutate(index = ifelse(symbol == djia_symbol, 'DJIA', 'Stock in Dow Jones'),
+         # Hack alert: Prefixing the DJIA with 'zzz_' in order be plotted at the end
+         symbol = ifelse(symbol == djia_symbol, paste('zzz_', djia_symbol), symbol)) %>%
+  ggplot(aes(x = date, y = close, group = symbol, color = index, size = index)) +
+  geom_line() +
+  scale_color_manual(values = c('black', 'gray')) +
+  scale_size_manual(values = c(0.5, 0.25)) +
+  labs(colour = '') +
+  theme(legend.position = 'bottom') +
+  guides(size = FALSE)
+```
+
+The DJIA is calculated with the stock prices of 30 selected public large companies, to calculate the DJIA the prices are added and then divided by the Dow divisor, which is constantly modified, then it is not surprising that most of these stocks are behaving in a similar way to the DJIA.
+
+```{r xxx, echo=TRUE, fig.cap="\\label{fig:xxx} Change rate against the Dow Jones Industrial Average index", fig.height=13, fig.width=10}
+dow_jones_historical_records %>%
+  filter(symbol != 'DIA') %>%
+  left_join(
+    dow_jones_historical_records %>%
+      filter(symbol == 'DIA') %>% 
+      select(date, close) %>%
+      setnames(old = c('close'), new = c('close_index')),
+    by = 'date') %>%
+  mutate(rate = (close - close_index) / close_index) %>%
+  ggplot(aes(x = date, y = rate, group = symbol, color = symbol)) +
+  geom_line(size = 0.3) +
+  labs(colour = '') +
+  theme(legend.position = 'none') +
+  geom_dl(aes(label = symbol), method = 'angled.boxes') +
+  geom_abline(aes(intercept = 0, slope = 0), linetype = 'dashed')
+```
+
+In figure \ref{fig:DowJonesCorrelation} is presented a visualization generated for the following code, which shows the correlation of each one of the stocks in the Dow Jones against each other and against the actual DJIA. It can be observed that in most of the cases there is a high correlation, observed by a dominance of the red color in the matrix (which is the color to indicate a high correlation, i.e. close to 1), only 5 companies seem no to follow the same tendency as the the general DJIA.
+
+```{r down_jones_correlation, echo=TRUE, fig.cap="\\label{fig:DowJonesCorrelation} Correlation among Dow Jones stocks", fig.height=10, fig.width=10}
+dow_jones_historical_records %>%
+  # Hack alert: Prefixing the DJIA with ' ' in order to place it firts
+  mutate(symbol = ifelse(symbol != djia_symbol, symbol, paste(' ', djia_symbol))) %>%
+  spread(symbol, close) %>% 
+  select(-date) %>%
+  cor(method = 'pearson', use = 'complete.obs') %>%
+  ggcorrplot()
+```
+
+Looking at the stocks one at a time, it seems like the stock prices fluctuates a lot and a clear pattern is not perceived, at least not at a human comprehensible level. This is understandable since the stock prices depend on a lot of different factors like the company's financial health, economic supply-demand and even involving human emotions like trust, euphoria or panic.
+
+At a macro level it can be observed that they are common events that seem to affect the stock prices as a whole, like a rise and sudden fall of prices around the beginning of 2018, or a generalized drop on the stock prices at the end of 2018. However these kind of events also do not seem to have a (humanly) comprehensible pattern either.
