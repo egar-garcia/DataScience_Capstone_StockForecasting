@@ -1,5 +1,5 @@
 #-----------------------------------
-# 1. Required packages and libraries
+# 0. Required packages and libraries
 #-----------------------------------
 
 if(!require(tidyverse)) install.packages('tidyverse')
@@ -34,7 +34,7 @@ install_keras()
 
 
 #-----------------------------------
-# 2. Dataset management
+# 1. Dataset management
 #-----------------------------------
 
 #' Loading the set of ticker symbols of the companies contemplated in
@@ -125,7 +125,7 @@ update_dow_jones_dataframe <- function(historical_prices) {
 dow_jones_dataframe_filename <- 'dow_jones_dataframe.Rda'
 
 #--------------------
-# 2.1. Examples of usage
+# 1.1. Examples of usage
 #--------------------
 
 # Creating a new dataset
@@ -143,7 +143,7 @@ load(file = dow_jones_dataframe_filename)
 
 
 #-----------------------------------
-# 3. Visualization
+# 2. Visualization
 #-----------------------------------
 
 # Plotting the historical prices of all the 30 companies in the Dow Jones
@@ -158,6 +158,17 @@ dow_jones_historical_records %>%
   theme(legend.position = 'bottom') +
   geom_dl(aes(label = symbol), method = 'angled.boxes')
 
+# Plotting the historical prices grouped by industry
+dow_jones_historical_records %>%
+  filter(symbol != djia_symbol) %>%
+  left_join(dow_jones_stocks, by = 'symbol') %>%
+  select(date, close, symbol, industry, company) %>%
+  filter(symbol != djia_symbol) %>%
+  ggplot(aes(x = date, y = close)) +
+  geom_line(aes(group = symbol, color = symbol)) +
+  geom_dl(aes(label = symbol, color = symbol), method = 'smart.grid') +
+  facet_wrap(~industry, ncol = 4) +
+  theme(legend.position = 'none')
 
 # Plotting in grey the historical prices of all the 30 companies
 # and contrasting them with the historical prices of the actual
@@ -174,23 +185,6 @@ dow_jones_historical_records %>%
   theme(legend.position = 'bottom') +
   guides(size = FALSE)
 
-dow_jones_historical_records %>%
-  filter(symbol != 'DIA') %>%
-  left_join(
-    dow_jones_historical_records %>%
-      filter(symbol == 'DIA') %>% 
-      select(date, close) %>%
-      setnames(old = c('close'), new = c('close_index')),
-    by = 'date') %>%
-  mutate(rate = (close - close_index) / close_index) %>%
-  ggplot(aes(x = date, y = rate, group = symbol, color = symbol)) +
-  geom_line(size = 0.3) +
-  labs(colour = '') +
-  theme(legend.position = 'none') +
-  geom_dl(aes(label = symbol), method = 'angled.boxes') +
-  geom_abline(aes(intercept = 0, slope = 0), linetype = 'dashed')
-
-
 # Plotting the correlations among the stoks and the DJIA as a matrix heat-map
 dow_jones_historical_records %>%
   # Hack alert: Prefixing the DJIA with ' ' in order to place it firts
@@ -198,20 +192,19 @@ dow_jones_historical_records %>%
   spread(symbol, close) %>% 
   select(-date) %>%
   cor(method = 'pearson', use = 'complete.obs') %>%
-  ggcorrplot()
+  ggcorrplot(lab = TRUE)
 
-
-# Plotting the historical prices grouped by industry
+# Plotting the most, least and non correlated stocks against the DJIA
 dow_jones_historical_records %>%
-  filter(symbol != djia_symbol) %>%
-  left_join(dow_jones_stocks, by = 'symbol') %>%
-  select(date, close, symbol, industry, company) %>%
-  filter(symbol != djia_symbol) %>%
-  ggplot(aes(x = date, y = close)) +
-  geom_line(aes(group = symbol, color = symbol)) +
-  geom_dl(aes(label = symbol, color = symbol), method = 'smart.grid') +
-  facet_wrap(~industry, ncol = 4) +
-  theme(legend.position = 'none')
+  filter(symbol == djia_symbol | symbol == 'CAT' | symbol == 'WBA' | symbol == 'UNH') %>%
+  mutate(index = ifelse(symbol == djia_symbol, 'DJIA', 'Dow Jones stock')) %>%
+  ggplot(aes(x = date, y = close, group = symbol, color = symbol, size = index)) +
+  geom_line() +
+  scale_color_manual(values = c(DIA='black', CAT='red', WBA='blue', UNH='gray')) +
+  scale_size_manual(values = c(0.5, 0.25)) +
+  labs(colour = '') +
+  theme(legend.position = 'none') +
+  geom_dl(aes(label = symbol, color = symbol), method = 'last.polygons')
 
 
 #-----------------------------------

@@ -287,3 +287,135 @@ ggplot() +
   geom_line(data = preds, aes(x = date, y = close), color = 'red')
 
 
+#--------------------
+
+
+dow_jones_historical_records %>%
+  filter(symbol != 'DIA') %>%
+  left_join(
+    dow_jones_historical_records %>%
+      filter(symbol == 'DIA') %>% 
+      select(date, close) %>%
+      setnames(old = c('close'), new = c('close_index')),
+    by = 'date') %>%
+  mutate(rate = (close - close_index) / close_index) %>%
+  ggplot(aes(x = date, y = rate, group = symbol, color = symbol)) +
+  geom_line(size = 0.3) +
+  labs(colour = '') +
+  theme(legend.position = 'none') +
+  geom_dl(aes(label = symbol), method = 'angled.boxes') +
+  geom_abline(aes(intercept = 0, slope = 0), linetype = 'dashed')
+
+dow_jones_historical_records %>%
+  filter(symbol != 'DIA') %>%
+  left_join(
+    dow_jones_historical_records %>%
+      filter(symbol == 'DIA') %>% 
+      select(date, close) %>%
+      setnames(old = c('close'), new = c('close_index')),
+    by = 'date') %>%
+  group_by(symbol) %>%
+  mutate(mean_proportion = mean(close / close_index)) %>%
+  ungroup() %>%
+  mutate(rate = (close / close_index) - mean_proportion) %>%
+  ggplot(aes(x = date, y = rate, group = symbol, color = symbol)) +
+  geom_line(size = 0.3) +
+  labs(colour = '') +
+  theme(legend.position = 'none') +
+  geom_dl(aes(label = symbol), method = 'angled.boxes') +
+  geom_abline(aes(intercept = 0, slope = 0), linetype = 'dashed')
+
+
+dow_jones_historical_records %>%
+  filter(symbol == 'CAT' | symbol == 'WBA' | symbol == 'MMM') %>%
+  left_join(
+    dow_jones_historical_records %>%
+      filter(symbol == 'DIA') %>% 
+      select(date, close) %>%
+      setnames(old = c('close'), new = c('close_index')),
+    by = 'date') %>%
+  group_by(symbol) %>%
+  mutate(mean_proportion = mean(close / close_index)) %>%
+  ungroup() %>%
+  mutate(rate = (close / close_index) - mean_proportion) %>%
+  ggplot(aes(x = date, y = rate, group = symbol, color = symbol)) +
+  geom_line(size = 0.3) +
+  labs(colour = '') +
+  theme(legend.position = 'none') +
+  geom_dl(aes(label = symbol), method = 'angled.boxes') +
+  geom_abline(aes(intercept = 0, slope = 0), linetype = 'dashed')
+
+
+
+dow_jones_historical_records %>%
+  filter(symbol != djia_symbol) %>%
+  left_join(
+    dow_jones_historical_records %>%
+      filter(symbol == 'DIA') %>% 
+      select(date, close) %>%
+      setnames(old = c('close'), new = c('djia_close')),
+    by = 'date') %>%
+  group_by(symbol) %>%
+  mutate(mean_djia_proportion = mean(close / djia_close)) %>%
+  ungroup() %>%
+  mutate(djia_ratio_change = (close / djia_close) - mean_djia_proportion) %>%
+  ggplot(aes(x = date, y = djia_ratio_change,
+             group = symbol, color = symbol)) +
+  geom_line(size = 0.3) +
+  labs(y = 'Change in ratio against DJIA', colour = '') +
+  theme(legend.position = 'none') +
+  geom_dl(aes(label = symbol), method = 'angled.boxes') +
+  geom_hline(aes(yintercept = 0), linetype = 'dashed')
+
+
+dow_jones_historical_records %>%
+  filter(symbol != djia_symbol) %>%
+  left_join(
+    dow_jones_historical_records %>%
+      filter(symbol == 'DIA') %>% 
+      select(date, close) %>%
+      setnames(old = c('close'), new = c('djia_close')),
+    by = 'date') %>%
+  group_by(symbol) %>%
+  mutate(mean_djia_proportion = mean(close / djia_close)) %>%
+  ungroup() %>%
+  mutate(djia_ratio_change = (close / djia_close) - mean_djia_proportion) %>%
+  ggplot(aes(x = date, y = djia_ratio_change,
+             group = symbol, color = symbol)) +
+  geom_line(size = 0.3) +
+  labs(y = 'Change in ratio against DJIA', colour = '') +
+  theme(legend.position = 'none') +
+  geom_dl(aes(label = symbol), method = 'angled.boxes') +
+  geom_hline(aes(yintercept = 0), linetype = 'dashed')
+
+
+dow_jones_historical_records %>%
+  filter(symbol == djia_symbol | symbol == 'CAT' | symbol == 'WBA' | symbol == 'UNH') %>%
+  mutate(index = ifelse(symbol == djia_symbol, 'DJIA', 'Dow Jones stock'),
+         # Hack alert: Prefixing the DJIA with 'zzz_' in order be plotted at the end
+         symbol = ifelse(symbol == djia_symbol, 'DJIA', symbol)) %>%
+  ggplot(aes(x = date, y = close, group = symbol, color = symbol, size = index)) +
+  geom_line() +
+  scale_color_manual(values = c(DJIA = 'black', CAT = 'red', WBA = 'blue', UNH = 'gray')) +
+  scale_size_manual(values = c(0.5, 0.25)) +
+  labs(colour = '') +
+  theme(legend.position = 'none') +
+  geom_dl(aes(label = symbol, color = symbol), method = 'last.polygons')
+
+
+dow_jones_historical_records %>%
+  filter(symbol != djia_symbol) %>%
+  left_join(
+    dow_jones_historical_records %>%
+      filter(symbol == 'DIA') %>% 
+      select(date, close) %>%
+      setnames(old = c('close'), new = c('djia_close')),
+    by = 'date') %>%
+  ggplot(aes(x = date, y = close,
+             group = symbol, color = symbol)) +
+  geom_line(size = 0.3) +
+  labs(y = 'Change in ratio against DJIA', colour = '') +
+  theme(legend.position = 'none') +
+  geom_dl(aes(label = symbol), method = 'angled.boxes') +
+  geom_hline(aes(yintercept = 0), linetype = 'dashed')
+

@@ -267,7 +267,22 @@ dow_jones_historical_records %>%
   geom_dl(aes(label = symbol), method = 'angled.boxes')
 ```
 
-The following code generates the visualization in figure \ref{fig:DowJonesHistoricVsDJIA}, which is a comparison with the actual Dow Jones Industrial Average index (highlighted in black).
+The following code generates the visualization in figure \ref{fig:DowJonesHistoricPerIndustry} which displays the historical prices of the same stocks, but this time grouped by industry type.
+
+```{r historical_records_dow_jones_stocks_per_industry, echo=TRUE, fig.cap="\\label{fig:DowJonesHistoricPerIndustry} Dow Jones 5 year historic prices grouped per industry", fig.height=5, fig.width=10}
+dow_jones_historical_records %>%
+  filter(symbol != djia_symbol) %>%
+  left_join(dow_jones_stocks, by = 'symbol') %>%
+  select(date, close, symbol, industry, company) %>%
+  filter(symbol != djia_symbol) %>%
+  ggplot(aes(x = date, y = close)) +
+  geom_line(aes(group = symbol, color = symbol)) +
+  geom_dl(aes(label = symbol, color = symbol), method = 'smart.grid') +
+  facet_wrap(~industry, ncol = 4) +
+  theme(legend.position = 'none')
+```
+
+The following code generates the visualization in figure \ref{fig:DowJonesHistoricVsDJIA}, which contrasts the behavior of all Dow Jones stocks with the actual Dow Jones Industrial Average index (highlighted in black).
 
 ```{r historical_stocks_contrast_djia, echo=TRUE, fig.cap="\\label{fig:DowJonesHistoricVsDJIA} Dow Jones stoks in contrast with the Dow Jones Industrial Average index", fig.height=6, fig.width=10}
 dow_jones_historical_records %>%
@@ -283,38 +298,39 @@ dow_jones_historical_records %>%
   guides(size = FALSE)
 ```
 
-The DJIA is calculated with the stock prices of 30 selected public large companies, to calculate the DJIA the prices are added and then divided by the Dow divisor, which is constantly modified, then it is not surprising that most of these stocks are behaving in a similar way to the DJIA.
+The DJIA is calculated with the stock prices of 30 selected public large companies, to calculate the DJIA the prices are added and then divided by the Dow divisor, which is constantly modified, then it is not surprising that most of these stocks seems to behave in a similar way to the DJIA.
 
-```{r xxx, echo=TRUE, fig.cap="\\label{fig:xxx} Change rate against the Dow Jones Industrial Average index", fig.height=13, fig.width=10}
-dow_jones_historical_records %>%
-  filter(symbol != 'DIA') %>%
-  left_join(
-    dow_jones_historical_records %>%
-      filter(symbol == 'DIA') %>% 
-      select(date, close) %>%
-      setnames(old = c('close'), new = c('close_index')),
-    by = 'date') %>%
-  mutate(rate = (close - close_index) / close_index) %>%
-  ggplot(aes(x = date, y = rate, group = symbol, color = symbol)) +
-  geom_line(size = 0.3) +
-  labs(colour = '') +
-  theme(legend.position = 'none') +
-  geom_dl(aes(label = symbol), method = 'angled.boxes') +
-  geom_abline(aes(intercept = 0, slope = 0), linetype = 'dashed')
-```
+In figure \ref{fig:DowJonesCorrelation} is presented a visualization generated for the following code, which shows the correlation of each one of the stocks in the Dow Jones against each other and against the actual DJIA (identified with the ticker symbol "DIA"). It can be observed that in most of the cases there is a high correlation, observed by a dominance of the red color in the matrix, which is the color used to indicate a high correlation, i.e. close to 1.
 
-In figure \ref{fig:DowJonesCorrelation} is presented a visualization generated for the following code, which shows the correlation of each one of the stocks in the Dow Jones against each other and against the actual DJIA. It can be observed that in most of the cases there is a high correlation, observed by a dominance of the red color in the matrix (which is the color to indicate a high correlation, i.e. close to 1), only 5 companies seem no to follow the same tendency as the the general DJIA.
-
-```{r down_jones_correlation, echo=TRUE, fig.cap="\\label{fig:DowJonesCorrelation} Correlation among Dow Jones stocks", fig.height=10, fig.width=10}
+```{r down_jones_correlation, echo=TRUE, fig.cap="\\label{fig:DowJonesCorrelation} Correlation among Dow Jones stocks", fig.height=16, fig.width=16}
 dow_jones_historical_records %>%
   # Hack alert: Prefixing the DJIA with ' ' in order to place it firts
   mutate(symbol = ifelse(symbol != djia_symbol, symbol, paste(' ', djia_symbol))) %>%
   spread(symbol, close) %>% 
   select(-date) %>%
   cor(method = 'pearson', use = 'complete.obs') %>%
-  ggcorrplot()
+  ggcorrplot(lab = TRUE)
 ```
 
-Looking at the stocks one at a time, it seems like the stock prices fluctuates a lot and a clear pattern is not perceived, at least not at a human comprehensible level. This is understandable since the stock prices depend on a lot of different factors like the company's financial health, economic supply-demand and even involving human emotions like trust, euphoria or panic.
+To illustrate the interpretation of the correlations, let's take the following stocks in regards with their correlation respect to the DJIA, the respective visualization is generated by the code that follows the list: 
+
+* "CAT" the stock with the highest correlation (correlation of 97%). As it can be seen in figure \ref{fig:SelectedStocksAgainstDJIA} its behaviour looks to be very similar to the DJIA, i.e. uptrends, downtrends, big-rises and big-drops seem to match.
+* "WBA" the one with the highest inverse correlation (correlation of -76%). As it can be seen in figure \ref{fig:SelectedStocksAgainstDJIA}, its behavior looks to be somehow contrary to the DJIA, p.e. from early 2016 the DJIA has a general tendency to rise, but "WBA" has a general tendency to drop.
+* "UNH" the closest to not having correlation at all (correlation of -19%). As it can be seen in figure \ref{fig:SelectedStocksAgainstDJIA}, looks like "UNH" in general presents its own tendency.
+
+```{r selected_stocks_against_djia, echo=TRUE, fig.cap="\\label{fig:SelectedStocksAgainstDJIA}", fig.height=6, fig.width=10}
+dow_jones_historical_records %>%
+  filter(symbol == djia_symbol | symbol == 'CAT' | symbol == 'WBA' | symbol == 'UNH') %>%
+  mutate(index = ifelse(symbol == djia_symbol, 'DJIA', 'Dow Jones stock')) %>%
+  ggplot(aes(x = date, y = close, group = symbol, color = symbol, size = index)) +
+  geom_line() +
+  scale_color_manual(values = c(DIA='black', CAT='red', WBA='blue', UNH='gray')) +
+  scale_size_manual(values = c(0.5, 0.25)) +
+  labs(colour = '') +
+  theme(legend.position = 'none') +
+  geom_dl(aes(label = symbol, color = symbol), method = 'last.polygons')
+```
+
+When looking at the stocks one at a time, it seems like the stock prices fluctuates a lot and a clear pattern is not perceived, at least not at a human comprehensible level. This is understandable since the stock prices depend on a lot of different factors like the company's financial health, economic supply-demand and even involving human emotions like trust, euphoria or panic.
 
 At a macro level it can be observed that they are common events that seem to affect the stock prices as a whole, like a rise and sudden fall of prices around the beginning of 2018, or a generalized drop on the stock prices at the end of 2018. However these kind of events also do not seem to have a (humanly) comprehensible pattern either.
