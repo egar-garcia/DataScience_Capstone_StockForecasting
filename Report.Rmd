@@ -5,7 +5,7 @@ date: "4/13/2019"
 output:
   pdf_document:
     toc: true
-    toc_depth: 2
+    toc_depth: 3
     number_sections: true
     fig_width: 7
     fig_height: 4.33
@@ -15,7 +15,28 @@ output:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
-eval_define_dataset_retrieval <- !exists('dow_jones_stocks') | !exists('djia_symbol') | !exists('iex_api_url_template') | !exists('get_historical_records') | !exists('get_dow_jones_dataframe') | !exists('update_dow_jones_dataframe')
+eval_define_dataset_retrieval <-
+  !exists('dow_jones_stocks') |
+  !exists('djia_symbol') |
+  !exists('iex_api_url_template') |
+  !exists('get_historical_records') |
+  !exists('get_dow_jones_dataframe') |
+  !exists('update_dow_jones_dataframe') |
+  !exists('dow_jones_historical_records')
+
+eval_define_trading_days_retrieval <- 
+  !exists('market_holidays') |
+  !exists('get_trading_days_in_range') |
+  !exists('get_trading_days_after')
+
+eval_generate_training_test_sets <-
+  !exists('get_train_and_test_sets') |
+  !exists('sets')
+
+eval_linear_regression_model <-
+  !exists('LinearRegressionStockForecaster') |
+  !exists('lr_forecaster') |
+  !exists('lr_predictions')
 ```
 
 
@@ -45,7 +66,7 @@ To address the problem, different machine learning methods are used, they take h
 
 ## Dataset
 
-There are multiple options to obtain the historical stock records needed to feed the machine learning algorithms, a popular soure (and the one used in this project) is an API provided by IEX Group Inc. (https://iextrading.com), which provides access to stock historical records to developers and engineers for free.
+There are multiple options to obtain the historical stock records needed to feed the machine learning algorithms, a popular source (and the one used in this project) is an API provided by IEX Group Inc. (https://iextrading.com), which provides access to stock historical records to developers and engineers for free.
 
 The API provided by IEX (which documentation can be found at https://iextrading.com/developer/docs/#chart) allows to retrieve historical stock price information for a maximum of 5 years back to the current date. The API can provide historical records for several companies, but for this project only the records for the ones in the Dow Jones are considered.
 
@@ -67,13 +88,13 @@ Each one of the historical records corresponds to the information of a trading d
 ## Key steps
 
 1. Building the mechanisms to retrieve the dataset into the local machine's storage, and to keep it updated.
-2. Perfoming an analysis and exploration of the dataset, aiming to select only the features that are relevant to perform predictions.
+2. Performing an analysis and exploration of the dataset, aiming to select only the features that are relevant to perform predictions.
 3. Building models that represent the machine learning methods used in this project to address the problem.
-4. Evaluation of the different models with common training and test sets, and doing the camparison based on the RMSE against the groud truth.
-5. Analyzing the predicting performance of each one of the models, and disccussing the results.
+4. Evaluation of the different models with common training and test sets, and doing the comparison based on the RMSE against the ground truth.
+5. Analyzing the predicting performance of each one of the models, and discussing the results.
 
 
-# Analysis
+# Data analysis
 
 ## Data exploration
 
@@ -219,6 +240,38 @@ update_dow_jones_dataframe <- function(historical_prices) {
 }
 ```
 
+The following is a helper function to get a subset of the dataset by filtering by a given ticker symbol and/or a date range.
+
+```{r filter_historical_records, eval=eval_define_dataset_retrieval}
+#' Gets a dataframe containing a subset of the records of the current dataset,
+#' which is obtained by filtering by a ticker symbol and/or a date range.
+#' 
+#' @param ticker_symbol The ticker symbol to filter the data.
+#' @param from_date The minimum date to appear in the records of the subset.
+#' @param to_date The maximum date to appear in the records of the subset.
+#' @return The dataframe with the subset resulted of filtering the dataset.
+filter_historical_records <- function(historical_prices, 
+                                      ticker_symbol = NULL,
+                                      start_date = NULL, end_date = NULL) {
+  df <- historical_prices
+  
+  # Filtering by ticker symbol if exists
+  if (!is.null(ticker_symbol)) {
+    df <- df %>% filter(symbol == ticker_symbol)
+  }
+  # Filtering by start date if exists
+  if (!is.null(start_date)) {
+    df <- df %>% filter(date >= start_date)
+  }
+  # Filtering by end date if exists
+  if (!is.null(end_date)) {
+    df <- df %>% filter(date <= end_date)
+  }
+  
+  df
+}
+```
+
 The following variable `dow_jones_dataframe_filename` specifies the file's name `dow_jones_dataframe.Rda`, which is where the dataset is being stored.
 
 ```{r dataset_filename, eval=eval_define_dataset_retrieval}
@@ -228,7 +281,7 @@ dow_jones_dataframe_filename <- 'dow_jones_dataframe.Rda'
 
 ### Examples of data retrieval {-}
 
-The following is an example to create a brand new dataset, using the defaul historical period of 5 years back from the current date. Then the dataset is saved to the file `dow_jones_dataframe.Rda`.
+The following is an example to create a brand new dataset, using the default historical period of 5 years back from the current date. Then the dataset is saved to the file `dow_jones_dataframe.Rda`.
 
 ```{r brand_new_dataset, eval=FALSE}
 dow_jones_historical_records <- get_dow_jones_dataframe()
@@ -244,9 +297,9 @@ dow_jones_historical_records <-
 save(dow_jones_historical_records, file = dow_jones_dataframe_filename)
 ```
 
-The following is an example for just loading and existing dataset from the file `dow_jones_dataframe.Rda` into the variable `dow_jones_historical_records` (assuming that this varaible was previously saved, p.e. by running `save(dow_jones_historical_records, file = dow_jones_dataframe_filename)`).
+The following is an example for just loading and existing dataset from the file `dow_jones_dataframe.Rda` into the variable `dow_jones_historical_records` (assuming that this variable was previously saved, p.e. by running `save(dow_jones_historical_records, file = dow_jones_dataframe_filename)`).
 
-```{r load_dataset, eval=FALSE}
+```{r load_dataset, eval=eval_define_dataset_retrieval}
 load(file = dow_jones_dataframe_filename)
 ```
 
@@ -314,11 +367,11 @@ dow_jones_historical_records %>%
 
 To illustrate the interpretation of the correlations, let's take the following stocks in regards with their correlation respect to the DJIA, the respective visualization is generated by the code that follows the list: 
 
-* "CAT" the stock with the highest correlation (correlation of 97%). As it can be seen in figure \ref{fig:SelectedStocksAgainstDJIA} its behaviour looks to be very similar to the DJIA, i.e. uptrends, downtrends, big-rises and big-drops seem to match.
+* "CAT" the stock with the highest correlation (correlation of 97%). As it can be seen in figure \ref{fig:SelectedStocksAgainstDJIA} its behavior looks to be very similar to the DJIA, i.e. up-trends, down-trends, big-rises and big-drops seem to match.
 * "WBA" the one with the highest inverse correlation (correlation of -76%). As it can be seen in figure \ref{fig:SelectedStocksAgainstDJIA}, its behavior looks to be somehow contrary to the DJIA, p.e. from early 2016 the DJIA has a general tendency to rise, but "WBA" has a general tendency to drop.
 * "UNH" the closest to not having correlation at all (correlation of -19%). As it can be seen in figure \ref{fig:SelectedStocksAgainstDJIA}, looks like "UNH" in general presents its own tendency.
 
-```{r selected_stocks_against_djia, echo=TRUE, fig.cap="\\label{fig:SelectedStocksAgainstDJIA}", fig.height=6, fig.width=10}
+```{r selected_stocks_against_djia, echo=TRUE, fig.cap="\\label{fig:SelectedStocksAgainstDJIA} Example of some stocks highly, inverse and non correlated in comparison to the DJIA", fig.height=6, fig.width=10}
 dow_jones_historical_records %>%
   filter(symbol == djia_symbol | symbol == 'CAT' | symbol == 'WBA' | symbol == 'UNH') %>%
   mutate(index = ifelse(symbol == djia_symbol, 'DJIA', 'Dow Jones stock')) %>%
@@ -334,3 +387,322 @@ dow_jones_historical_records %>%
 When looking at the stocks one at a time, it seems like the stock prices fluctuates a lot and a clear pattern is not perceived, at least not at a human comprehensible level. This is understandable since the stock prices depend on a lot of different factors like the company's financial health, economic supply-demand and even involving human emotions like trust, euphoria or panic.
 
 At a macro level it can be observed that they are common events that seem to affect the stock prices as a whole, like a rise and sudden fall of prices around the beginning of 2018, or a generalized drop on the stock prices at the end of 2018. However these kind of events also do not seem to have a (humanly) comprehensible pattern either.
+
+
+# Methods
+
+## Evaluation methodology
+
+To evaluate the different (machine learning) methods tested in this project, an object-oriented approach is used, each method is going to be represented by a model which would be generated through the construction of an object.
+
+To generate a model, the constructor function receives a training set consisting of stock historical records in a given date range (in the past), this  is used to fit the model and construct the model's object. The model's object includes a `predict` function used to perform a prediction for a given date range (which could be the one for testing, validation, or production ideally in the future).
+
+The evaluation consist in randomly select a date range for training, it should contain 750 trading days (which is around 3 years of historical records) and being old enough to leave at least 120 trading days in the dataset following the training end date to use for validation. Also it is selected a random ticker symbol in the Dow Jones, except 'DOW', because it doesn't have enough historical records to do an evaluation with 750 trading days back.
+
+The performance of prediction is based on the RMSE, which is calculated agains the ground truth in the test set for the following 1, 5, 10, 20, 40, 60 and 120 trading days after the training end date.
+
+## Preparation
+
+### Trading days retrieval
+
+To perform predictions in a date range, it is necessary to identify the trading days (which are the days when the stock market is open) that exist in that given range, because only on them it makes sense to perform predictions.
+
+The following code loads from the file `market_holidays.csv` the list of market holidays, i.e. the days that the market is closed without considering weekends.
+
+```{r market_holidays_load, eval=eval_define_trading_days_retrieval}
+#' Market holidays loaded from file 'market_holidays.csv' 
+market_holidays <- read.csv('market_holidays.csv') %>%
+  mutate(date = as.Date(date, format='%Y-%m-%d'))
+```
+
+The following is the implementation of a function to get the trading days existing in a date range. The strategy is to get the sequence of all the existing days in that range and then remove weekends and market holidays .
+
+```{r trading_days_in_range_retrieval, eval=eval_define_trading_days_retrieval}
+#' Getting the trading days existing in a date range.
+#'
+#' @param from_date The starting date of the range.
+#' @param datetime to_date The ending date of the range.
+#' @return A list of the trading days in the specified date range.
+get_trading_days_in_range <- function(from_date, to_date) {
+  # Checking if the data range is valid
+  if (from_date > to_date) {
+    stop('Invalid date range')
+  }
+  
+  data.frame('date' = seq(from_date, to_date, 'days')) %>% # Sequene of dates in the range
+    filter(!(wday(date) %in% c(1, 7))) %>% # Filtering by weekdays (Mon to Fri)
+    anti_join(market_holidays, by = 'date')  # Removing holidays
+}
+```
+
+The following function is used to get a determined number of trading days after a given date, which is very useful for testing and measuring the performance of the different methods tested in this project, by performing the tests for different given numbers of days ahead after training.
+
+```{r num_trading_days_retrieval, eval=eval_define_trading_days_retrieval}
+#' Getting a specific number of trading days after a given date.
+#'
+#' @param after_date The date after which training days are going to be retrieved.
+#' @param num_trading_days The number of training days to get.
+#' @return A list containing the trading days.
+get_trading_days_after <- function(after_date, no_trading_days) {
+  trading_days <- data.frame(date = as.Date(character()))
+  counter <- 0
+  current_date <- after_date
+  
+  # Getting each day after the given date till getting 
+  # the requested number of days
+  while (counter < no_trading_days) {
+    current_date <- current_date + ddays(1)
+    
+    # If not in a weekend nor a holiday adding the date to the set of trading days
+    if (!(wday(current_date) %in% c(1, 7) | current_date %in% market_holidays$date)) {
+      counter <- counter + 1
+      trading_days[counter,] <- c(current_date)
+    }
+  }
+  
+  trading_days
+}
+```
+
+### Generating training and test sets
+
+The following function generates a list containing the training and test sets from a given dataset, they are generated by filtering the records by a specific ticker symbol,  then for the training set the records in the given date range are chosen, and finally the test set is created by choosing the historic records corresponding to the following given number of trading days after the training's end date.
+
+```{r generate_training_test_sets_function, eval=eval_generate_training_test_sets}
+#' Extracts training and test sets from a given data set.
+#' The training set is created with records in the given date range
+#' for the training. The test set is created with records 
+#' from the day after the training day and to the date in which 
+#' the number of requested test days is covered with trading days.
+#'
+#' @param historical_prices The dataset of stock historical prices used 
+#'    to extract the training and test sets from.
+#' @param ticker_symbol The ticker symbol to perform predictions for.
+#' @param start_training The minimum date for the records used in the training set.
+#' @param end_training The maximum date for the records used in the training set.
+#' @param num_test_days The number of trading days after end_training
+#'    used to create the test set.
+#' @return A list containing the ticker symbol, training set and test set.
+get_train_and_test_sets <- function(
+  historical_prices, ticker_symbol, start_training, end_training, num_test_days) {
+  
+  # Filtering the data set to only contains the records related to the
+  # given ticker symbol
+  df <- historical_prices %>%
+    filter(symbol == ticker_symbol)
+  
+  # Getting the training set
+  training_set <- df %>%
+    filter(date >= start_training & date <= end_training)
+  
+  # Getting the specific dates for test which size is 'test_days'
+  test_days <- get_trading_days_after(end_training, num_test_days)
+  
+  # Getting the test set
+  test_set <- df %>%
+    filter(date >= min(test_days$date) & date <= max(test_days$date))
+  
+  list(symbol = ticker_symbol, training = training_set, test = test_set)
+}
+```
+
+The following is the code to do the random selection of the ticker symbol and date range used create the training and test set, which are used to perform the evaluation for the machine learning methods studied in this project.
+
+```{r generate_random_training_test_sets, eval=eval_generate_training_test_sets}
+# Choosing a random ticker symbol, except 'DOW' since it doesn't have enough data
+random_ticker_symbol <- sample(filter(dow_jones_stocks, symbol != 'DOW')$symbol , 1)
+# Getting the available dates for that ticker symbol
+random_dates <- filter(dow_jones_historical_records, symbol == random_ticker_symbol)
+# Getting a random training end date such as there are 
+# at least 750 historical records up to it (for training) and
+# at least 120 after (for testing )
+idx_random_end_training <- sample(750:(nrow(random_dates) - 120), 1)
+random_end_training <- random_dates[idx_random_end_training, 'date']
+# Calculating the training start date such as there are 750 records for training set
+random_start_training <- random_dates[(idx_random_end_training - 750 + 1), 'date']
+
+# Extracting train and test sets
+sets <- get_train_and_test_sets(dow_jones_historical_records,
+                                random_ticker_symbol,
+                                random_start_training,
+                                random_end_training,
+                                120)
+
+# Cleaning intermediate variables
+rm(random_ticker_symbol, random_dates,
+   idx_random_end_training, random_end_training, random_start_training)
+```
+
+The result of the random selection used for evaluation purposes can be seen by running the following code.
+
+```{r result_of_random_selection, eval=TRUE}
+print(sprintf('Symbol: %s, Training: [%s, %s], Test: [%s, %s]',
+              sets$symbol, min(sets$training$date), max(sets$training$date),
+              min(sets$test$date), max(sets$test$date)))
+```
+
+### Supporting the display of evaluation results
+
+In here some useful functions are defined to support the visualizations (included in this report) of the evaluation results, which are obtained after evaluate each one of the methods/models studied in this project.
+
+The following function plots the comparison of the predictions given for a particular method against the ground truth in the training and test sets.
+
+```{r plot_predictions, eval=TRUE}
+#' Plots the predictions in comparison with the training and validation sets,
+#' in order to provide a visualization of a model's prediction performance.
+#'
+#' @param sets A list containing the training and test sets.
+#' @param predictions The predictions against the test set.
+#' @param training_predictions The predictions against the training set (optional). 
+plot_predictions <- function(sets, predictions, training_predictions = NULL) {
+  plot <- ggplot()
+  
+  if (!is.null(training_predictions)) {
+    plot <- plot + 
+      geom_line(data = training_predictions,
+                aes(x = date, y = close, color = 'Training Prediction'))
+  }
+  
+  plot <- plot +
+    geom_line(data = sets$training, aes(x = date, y = close, color = 'Training Set')) +
+    geom_line(data = sets$test, aes(x = date, y = close, color = 'Test Set')) +
+    geom_line(data = predictions, aes(x = date, y = close, color = 'Test Prediction')) +
+    scale_color_manual(values = c('Training Set' = 'blue',
+                                  'Training Prediction' = 'cyan',
+                                  'Test Set' = 'green',
+                                  'Test Prediction' = 'red')) +
+    labs(color = '') +
+    theme(legend.position = 'top')
+  
+  plot
+}
+```
+
+The following code creates a dataframe to store the evaluation results for all the methods considered in this project, evaluations are based on the RMSE against the ground truth in the test set applied to the following 1, 5, 10, 20, 40, 60 and 120 tradings days after the end of the training. Then a function is defined to support the displaying (and inclusion in this report) of the results for an individual method/model.
+
+```{r report_results_support, eval=TRUE}
+#' Creates an empty dataframe to report the evaluation results
+create_results_dataframe <- function() {
+  data.frame('Method' = character(),
+             'Number of Trading Days' = integer(), 
+             'RMSE' = numeric(),
+             stringsAsFactors = FALSE, check.names = FALSE)
+}
+
+#' Dataframe to store all the evaluation results (for each method)
+results <- create_results_dataframe()
+
+#' This is a helper function used to support the displaying of the
+#' evaluation results for a particular method, and at the same time
+#' adding them to the dataframe that contains all the results.
+get_evaluation_results <- function(method, predictions) {
+  eval_results <- create_results_dataframe()
+
+  for (i in c(1, 5, 10, 20, 40, 60, 120)) {
+    n <- nrow(eval_results) + 1
+    eval_results[n, 'Method'] <- method
+    eval_results[n, 'Number of Trading Days'] <- i
+    eval_results[n, 'RMSE'] <- RMSE(predictions$close[1:i], sets$test$close[1:i])
+  }
+
+  results <<- rbind(results, eval_results)
+
+  eval_results %>% select(-'Method')
+}
+```
+
+## Classical ML methods
+
+### Linear Regression
+
+```{r linear_regression_model, eval=eval_linear_regression_model}
+#' This function represents a constructor 
+#' for a stock forecaster model based on Linear Regression.
+#'
+#' @param base_dataset The dataframe used to extract the training set
+#'    in accordance with the date range. 
+#' @param ticker_symbol The ticker symbol to perform predictions for.
+#' @param training_start The minimum date for the records used in the training set.
+#' @param training_end The maximum date for the records used in the training set.
+#' @return The model based on Linear Regression.
+LinearRegressionStockForecaster <- function(
+  base_dataset, ticker_symbol, training_start = NULL, training_end = NULL) {
+
+  model <- list()
+
+  # Extracting the training set from the base dataset,
+  # i.e. filtering by ticker symbol and date range
+  training_set <- filter_historical_records(
+    base_dataset, ticker_symbol, training_start, training_end) %>%
+    select(date, close)
+
+  # Fitting a Linear Regression model where
+  # 'date' is the predictor and 'close' is the predicted value
+  model$model <- train(close~date, data = training_set, method = 'lm')
+
+  #' The predicting function
+  #'
+  #' @param from_date The initial date of the date range to predict.
+  #' @param to_date The final date of the date range to predict.
+  #' @return A dataframe containing the dates in the range to predict
+  #'    with their respective predicted closing price.
+  model$predict <- function(from_date, to_date = NULL) {
+    # If final date is null, then using the initial date, i.e predicting for 1 day
+    if (is.null(to_date)) {
+      to_date <- from_date
+    }
+
+    # Getting a dataframe containing the trading days to make predictions for
+    trading_days <- get_trading_days_in_range(from_date, to_date)
+    # Getting the predicted stock closing values
+    preds <- predict(model$model, trading_days)
+    # Creating the dataframe with the predicted values per trading day
+    data.frame(date = trading_days$date, close = preds)
+  }
+
+  model
+}
+```
+
+```{r linear_regression_train_predict, eval=eval_linear_regression_model}
+lr_forecaster <- LinearRegressionStockForecaster(sets$training, sets$symbol)
+lr_predictions <- lr_forecaster$predict(min(sets$test$date), max(sets$test$date))
+```
+
+In figure \ref{fig:LinearRegressionEvalPlot}
+
+``````{r linear_regression_eval_plot, echo=FALSE, fig.cap="\\label{fig:LinearRegressionEvalPlot} Prediction with Linear Regression", fig.height=6, fig.width=10}
+plot_predictions(sets, lr_predictions,
+                 lr_forecaster$predict(min(sets$training$date), max(sets$training$date)))
+```
+
+In \ref{tab:LinearRegressionEval}.
+
+```{r linear_regression_eval_result, results = 'asis', echo=FALSE}
+knitr::kable(get_evaluation_results('Linear Regression', lr_predictions),
+             caption = '\\label{tab:LinearRegressionEval} Evaluation of Linear Regression')
+```
+
+### Generalized Additive Model
+
+### Support Vector Machine
+
+## Time series based methods
+
+### Moving average
+
+# Results
+
+In table \ref{tab:Results}.
+
+```{r results_table, results = 'asis', echo=FALSE}
+knitr::kable(results, caption = '\\label{tab:Results} Results')
+```
+
+
+```{r clean_up, include=FALSE}
+rm(eval_define_dataset_retrieval,
+   eval_define_trading_days_retrieval,
+   eval_generate_training_test_sets,
+   eval_linear_regression_model)
+```

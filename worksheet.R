@@ -419,3 +419,110 @@ dow_jones_historical_records %>%
   geom_dl(aes(label = symbol), method = 'angled.boxes') +
   geom_hline(aes(yintercept = 0), linetype = 'dashed')
 
+
+# ------------------------
+
+random_ticker_symbol <- sample(filter(dow_jones_stocks, symbol != 'DOW')$symbol , 1)
+random_dates <- filter(dow_jones_historical_records, symbol == random_ticker_symbol)
+idx_random_end_training <- sample(750:(nrow(random_dates) - 120), 1)
+random_end_training <- random_dates[idx_random_end_training, 'date']
+random_start_training <- random_dates[(idx_random_end_training - 750 + 1), 'date']
+
+sets <- get_train_and_test_sets(dow_jones_historical_records,
+                                random_ticker_symbol,
+                                random_start_training,
+                                random_end_training,
+                                120)
+
+rm(random_dates, random_end_training, random_start_training)
+
+#----------------
+
+lr_forecaster <- LinearRegressionStockForecaster(sets$training, sets$symbol)
+
+training_preds <- lr_forecaster$predict(min(sets$training$date), max(sets$training$date))
+preds <- lr_forecaster$predict(min(sets$test$date), max(sets$test$date))
+
+#' Plots the predictions in comparison with the training and validation sets,
+#' in order to provide a visualization of a model's prediction performance.
+#'
+#' @param sets A 
+plot_predictions <- function(sets, predictions, training_predictions = NULL) {
+  plot <- ggplot()
+
+  if (!is.null(training_predictions)) {
+    plot <- plot + 
+      geom_line(data = training_predictions,
+                aes(x = date, y = close, color = 'Training Prediction'))
+  }
+
+  plot <- plot +
+    geom_line(data = sets$training, aes(x = date, y = close, color = 'Training Set')) +
+    geom_line(data = sets$test, aes(x = date, y = close, color = 'Test Set')) +
+    geom_line(data = predictions, aes(x = date, y = close, color = 'Test Prediction')) +
+    scale_color_manual(values = c('Training Set' = 'blue',
+                                  'Training Prediction' = 'cyan',
+                                  'Test Set' = 'green',
+                                  'Test Prediction' = 'red')) +
+    labs(color = '') +
+    theme(legend.position = 'top')
+
+  plot
+}
+
+plot_predictions(sets, preds, training_preds)
+plot_predictions(sets, preds)
+
+ggplot() +
+  geom_line(data = training_preds, aes(x = date, y = close, color = 'Training Prediction')) +
+  geom_line(data = sets$training, aes(x = date, y = close, color = 'Training Set')) +
+  geom_line(data = sets$test, aes(x = date, y = close, color = 'Test Set')) +
+  geom_line(data = preds, aes(x = date, y = close, color = 'Test Prediction')) +
+  scale_color_manual(values = c('Training Set' = 'blue',
+                                'Training Prediction' = 'cyan',
+                                'Test Set' = 'green',
+                                'Test Prediction' = 'red')) +
+  labs(color = '') +
+  theme(legend.position = 'bottom')
+
+
+create_results_dataframe <- function() {
+  data.frame('Method' = character(),
+             'Number of Trading Days' = integer(), 
+             'RMSE' = numeric(),
+             stringsAsFactors = FALSE, check.names = FALSE)
+}
+
+results <- create_results_dataframe()
+
+get_evaluation_results <- function(method, predictions) {
+  eval_results <- create_results_dataframe()
+
+  for (i in c(1, 5, 10, 20, 40, 60, 120)) {
+    eval_results[(nrow(eval_results) + 1), ] <-
+      c(method, i, RMSE(predictions$close[1:i], sets$test$close[1:i]))
+  }
+
+  results <<- rbind(results, eval_results)
+
+  eval_results %>% select(-'Method')
+}
+
+get_evaluation_results('Linear Regression', preds)
+
+
+for (i in c(1, 5, 10, 20, 40, 60, 120)) {
+  results[(nrow(results) + 1), ] <-
+    c('Linear Regression', i, RMSE(preds$close[1:i], sets$test$close[1:i]))
+  #print(RMSE(preds$close[1:i], sets$test$close[1:i]))
+}
+
+
+lr_forecaster <- LinearRegressionStockForecaster(sets$training, sets$symbol)
+lr_predictions <- lr_forecaster$predict(min(sets$test$date), max(sets$test$date))
+
+plot_predictions(sets, lr_predictions,
+                 lr_forecaster$predict(min(sets$training$date), max(sets$training$date)))
+
+get_evaluation_results('Linear Regression', lr_predictions)
+

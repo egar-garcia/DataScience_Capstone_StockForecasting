@@ -1,5 +1,5 @@
 #-----------------------------------
-# 0. Required packages and libraries
+# Required packages and libraries
 #-----------------------------------
 
 if(!require(tidyverse)) install.packages('tidyverse')
@@ -34,7 +34,7 @@ install_keras()
 
 
 #-----------------------------------
-# 1. Dataset management
+# Dataset management
 #-----------------------------------
 
 #' Loading the set of ticker symbols of the companies contemplated in
@@ -121,12 +121,40 @@ update_dow_jones_dataframe <- function(historical_prices) {
   historical_prices[!duplicated(historical_prices[c('symbol', 'date')]),]
 }
 
+#' Gets a dataframe containing a subset of the records of the current dataset,
+#' which is obtained by filtering by a ticker symbol and/or a date range.
+#' 
+#' @param ticker_symbol The ticker symbol to filter the data.
+#' @param from_date The minimum date to appear in the records of the subset.
+#' @param to_date The maximum date to appear in the records of the subset.
+#' @return The dataframe with the subset resulted of filtering the dataset.
+filter_historical_records <- function(historical_prices, 
+                                      ticker_symbol = NULL,
+                                      start_date = NULL, end_date = NULL) {
+  df <- historical_prices
+  
+  # Filtering by ticker symbol if exists
+  if (!is.null(ticker_symbol)) {
+    df <- df %>% filter(symbol == ticker_symbol)
+  }
+  # Filtering by start date if exists
+  if (!is.null(start_date)) {
+    df <- df %>% filter(date >= start_date)
+  }
+  # Filtering by end date if exists
+  if (!is.null(end_date)) {
+    df <- df %>% filter(date <= end_date)
+  }
+  
+  df
+}
+
 #' The file's name where the dataset is stored.
 dow_jones_dataframe_filename <- 'dow_jones_dataframe.Rda'
 
-#--------------------
-# 1.1. Examples of usage
-#--------------------
+#--------------------------------
+# Examples of dataset management
+#--------------------------------
 
 # Creating a new dataset
 #dow_jones_historical_records <- get_dow_jones_dataframe()
@@ -143,7 +171,7 @@ load(file = dow_jones_dataframe_filename)
 
 
 #-----------------------------------
-# 2. Visualization
+# Visualization
 #-----------------------------------
 
 # Plotting the historical prices of all the 30 companies in the Dow Jones
@@ -207,8 +235,9 @@ dow_jones_historical_records %>%
   geom_dl(aes(label = symbol, color = symbol), method = 'last.polygons')
 
 
+
 #-----------------------------------
-# Trading days management
+# Trading days retrieval
 #-----------------------------------
 
 #' Market holidays loaded from file 'market_holidays.csv' 
@@ -263,7 +292,7 @@ get_trading_days_after <- function(after_date, no_trading_days) {
 # Training and test sets
 #-----------------------------------
 
-#' Extract training and test sets from a given data set.
+#' Extracts training and test sets from a given data set.
 #' The training set is created with records in the given date range
 #' for the training. The test set is created with records 
 #' from the day after the training day and to the date in which 
@@ -274,58 +303,129 @@ get_trading_days_after <- function(after_date, no_trading_days) {
 #' @param ticker_symbol The ticker symbol to perform predictions for.
 #' @param start_training The minimum date for the records used in the training set.
 #' @param end_training The maximum date for the records used in the training set.
-#' @param test_days The number of trading days after end_training
+#' @param num_test_days The number of trading days after end_training
 #'    used to create the test set.
+#' @return A list containing the ticker symbol, training set and test set.
 get_train_and_test_sets <- function(
-  historical_prices, ticker_symbol, start_training, end_training, test_days) {
-
+  historical_prices, ticker_symbol, start_training, end_training, num_test_days) {
+  
   # Filtering the data set to only contains the records related to the
   # given ticker symbol
   df <- historical_prices %>%
     filter(symbol == ticker_symbol)
-
+  
   # Getting the training set
   training_set <- df %>%
     filter(date >= start_training & date <= end_training)
-
+  
   # Getting the specific dates for test which size is 'test_days'
-  test_days <- get_trading_days_after(end_training, test_days)
-
+  test_days <- get_trading_days_after(end_training, num_test_days)
+  
   # Getting the test set
   test_set <- df %>%
     filter(date >= min(test_days$date) & date <= max(test_days$date))
-
-  list(training = training_set, test = test_set)
+  
+  list(symbol = ticker_symbol, training = training_set, test = test_set)
 }
 
 
-#' Gets a dataframe containing a subset of the records of the current dataset,
-#' which is obtained by filtering by a ticker symbol and/or a date range.
-#' 
-#' @param ticker_symbol The ticker symbol to filter the data.
-#' @param from_date The minimum date to appear in the records of the subset.
-#' @param to_date The maximum date to appear in the records of the subset.
-#' @return The dataframe with the subset resulted of filtering the dataset.
-filter_historical_prices <- function(historical_prices, 
-                                     ticker_symbol = NULL,
-                                     start_date = NULL, end_date = NULL) {
-  df <- historical_prices
+#-------------------------------------------------------
+# Chosing a random ticker symbol, traning and test sets
+# to perform evaluation
+#-------------------------------------------------------
 
-  # Filtering by ticker symbol if exists
-  if (!is.null(ticker_symbol)) {
-    df <- df %>% filter(symbol == ticker_symbol)
-  }
-  # Filtering by start date if exists
-  if (!is.null(start_date)) {
-    df <- df %>% filter(date >= start_date)
-  }
-  # Filtering by end date if exists
-  if (!is.null(end_date)) {
-    df <- df %>% filter(date <= end_date)
-  }
+# Choosing a random ticker symbol, except 'DOW' since it doesn't have enough data
+random_ticker_symbol <- sample(filter(dow_jones_stocks, symbol != 'DOW')$symbol , 1)
+# Getting the available dates for that ticker symbol
+random_dates <- filter(dow_jones_historical_records, symbol == random_ticker_symbol)
+# Getting a random training end date such as there are 
+# at least 750 historical records up to it (for training) and
+# at least 120 after (for testing )
+idx_random_end_training <- sample(750:(nrow(random_dates) - 120), 1)
+random_end_training <- random_dates[idx_random_end_training, 'date']
+# Calculating the training start date such as there are 750 records for training set
+random_start_training <- random_dates[(idx_random_end_training - 750 + 1), 'date']
 
-  df
+# Extracting train and test sets
+sets <- get_train_and_test_sets(dow_jones_historical_records,
+                                random_ticker_symbol,
+                                random_start_training,
+                                random_end_training,
+                                120)
+
+# Cleaning intermediate variables
+rm(random_ticker_symbol, random_dates,
+   idx_random_end_training, random_end_training, random_start_training)
+
+
+# Printing the values obtained by the random selection
+print(sprintf('Symbol: %s, Training: [%s, %s], Test: [%s, %s]',
+              sets$symbol, min(sets$training$date), max(sets$training$date),
+              min(sets$test$date), max(sets$test$date)))
+
+#-------------------------------------------------------
+# Useful fuctions to visualize and record the evaluation
+# of performance for the different methods
+#-------------------------------------------------------
+
+#' Plots the predictions in comparison with the training and validation sets,
+#' in order to provide a visualization of a model's prediction performance.
+#'
+#' @param sets A list containing the training and test sets.
+#' @param predictions The predictions against the test set.
+#' @param training_predictions The predictions against the training set (optional). 
+plot_predictions <- function(sets, predictions, training_predictions = NULL) {
+  plot <- ggplot()
+  
+  if (!is.null(training_predictions)) {
+    plot <- plot + 
+      geom_line(data = training_predictions,
+                aes(x = date, y = close, color = 'Training Prediction'))
+  }
+  
+  plot <- plot +
+    geom_line(data = sets$training, aes(x = date, y = close, color = 'Training Set')) +
+    geom_line(data = sets$test, aes(x = date, y = close, color = 'Test Set')) +
+    geom_line(data = predictions, aes(x = date, y = close, color = 'Test Prediction')) +
+    scale_color_manual(values = c('Training Set' = 'blue',
+                                  'Training Prediction' = 'cyan',
+                                  'Test Set' = 'green',
+                                  'Test Prediction' = 'red')) +
+    labs(color = '') +
+    theme(legend.position = 'top')
+  
+  plot
 }
+
+#' Creates an empty dataframe to report the evaluation results
+create_results_dataframe <- function() {
+  data.frame('Method' = character(),
+             'Number of Trading Days' = integer(), 
+             'RMSE' = numeric(),
+             stringsAsFactors = FALSE, check.names = FALSE)
+}
+
+#' Dataframe to store all the evaluation results (for each method)
+results <- create_results_dataframe()
+
+#' This is a helper function used to support the displaying of the
+#' evaluation results for a particular method, and at the same time
+#' adding them to the dataframe that contains all the results.
+get_evaluation_results <- function(method, predictions) {
+  eval_results <- create_results_dataframe()
+  
+  for (i in c(1, 5, 10, 20, 40, 60, 120)) {
+    n <- nrow(eval_results) + 1
+    eval_results[n, 'Method'] <- method
+    eval_results[n, 'Number of Trading Days'] <- i
+    eval_results[n, 'RMSE'] <- RMSE(predictions$close[1:i], sets$test$close[1:i])
+  }
+  
+  results <<- rbind(results, eval_results)
+  
+  eval_results %>% select(-'Method')
+}
+
 
 
 #-----------------------------------
@@ -349,7 +449,7 @@ LinearRegressionStockForecaster <- function(
 
   # Extracting the training set from the base dataset,
   # i.e. filtering by ticker symbol and date range
-  training_set <- filter_historical_prices(
+  training_set <- filter_historical_records(
     base_dataset, ticker_symbol, training_start, training_end) %>%
     select(date, close)
 
@@ -372,7 +472,7 @@ LinearRegressionStockForecaster <- function(
     # Getting a dataframe containing the trading days to make predictions for
     trading_days <- get_trading_days_in_range(from_date, to_date)
     # Getting the predicted stock closing values
-    preds <- predict(model, trading_days)
+    preds <- predict(model$model, trading_days)
     # Creating the dataframe with the predicted values per trading day
     data.frame(date = trading_days$date, close = preds)
   }
@@ -397,7 +497,7 @@ GeneralizedAdditiveModelStockForecaster <- function(
 
   # Extracting the training set from the base dataset,
   # i.e. filtering by ticker symbol and date range
-  training_set <- filter_historical_prices(
+  training_set <- filter_historical_records(
     base_dataset, ticker_symbol, training_start, training_end) %>%
     select(date, close)
 
@@ -427,7 +527,7 @@ GeneralizedAdditiveModelStockForecaster <- function(
     # Getting a dataframe containing the trading days to make predictions for
     trading_days <- get_trading_days_in_range(from_date, to_date)
     # Getting the predicted stock closing values
-    preds <- predict(model, trading_days)
+    preds <- predict(model$model, trading_days)
     # Creating the dataframe with the predicted values per trading day
     data.frame(date = trading_days$date, close = preds)
   }
@@ -452,7 +552,7 @@ SupportVectorMachineStockForecaster <- function(
   
   # Extracting the training set from the base dataset,
   # i.e. filtering by ticker symbol and date range
-  training_set <- filter_historical_prices(
+  training_set <- filter_historical_records(
     base_dataset, ticker_symbol, training_start, training_end) %>%
     select(date, close)
   
@@ -480,7 +580,7 @@ SupportVectorMachineStockForecaster <- function(
     # Getting a dataframe containing the trading days to make predictions for
     trading_days <- get_trading_days_in_range(from_date, to_date)
     # Getting the predicted stock closing values
-    preds <- predict(model, trading_days)
+    preds <- predict(model$model, trading_days)
     # Creating the dataframe with the predicted values per trading day
     data.frame(date = trading_days$date, close = preds)
   }
@@ -507,7 +607,7 @@ MovingAverageStockForecaster <- function(
 
   # Extracting the training set from the base dataset,
   # i.e. filtering by ticker symbol and date range
-  training_set <- filter_historical_prices(
+  training_set <- filter_historical_records(
     base_dataset, ticker_symbol, training_start, training_end) %>%
     select(date, close)
 
@@ -569,7 +669,7 @@ ArimaStockForecaster <- function(
 
   # Extracting the training set from the base dataset,
   # i.e. filtering by ticker symbol and date range
-  training_set <- filter_historical_prices(
+  training_set <- filter_historical_records(
     base_dataset, ticker_symbol, training_start, training_end) %>%
     select(date, close)
 
@@ -636,7 +736,7 @@ ProphetStockForecaster <- function(
   # Extracting the training set from the base dataset)
   # (i.e. filtering by ticker symbol and date range),
   # and changing the column names to 'ds' and 'y' which are the ones Prophet uses
-  training_set <- filter_historical_prices(
+  training_set <- filter_historical_records(
     base_dataset, ticker_symbol, start_date, end_date) %>%
     select(date, close) %>%
     setnames(old = c('date', 'close'), new = c('ds', 'y'))
@@ -694,7 +794,7 @@ LongShortTermMemoryStockForecaster <- function(
 
   # Extracting the training set from the base dataset)
   # i.e. filtering by ticker symbol and date range.
-  model$training_set <- filter_historical_prices(
+  model$training_set <- filter_historical_records(
     base_dataset, model$ticker_symbol, start_date, end_date) %>%
     select(date, close)
 
