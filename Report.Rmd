@@ -49,6 +49,11 @@ eval_gam_model <-
   !exists('GeneralizedAdditiveModelStockForecaster') |
   !exists('gam_forecaster') |
   !exists('gam_predictions')
+
+eval_svm_model <-
+  !exists('SupportVectorMachineStockForecaster') |
+  !exists('svm_forecaster') |
+  !exists('svm_predictions')
 ```
 
 
@@ -810,9 +815,82 @@ knitr::kable(get_evaluation_results('GAM', gam_predictions),
 ```
 
 
-### Support Vector Machine
+### Support-Vector Machine
 
 [@support-vector-networks]
+
+```{r svm_model, eval=eval_svm_model}
+#' This function represents a constructor 
+#' for a stock forecaster model based on Support-Vector Machine.
+#'
+#' @param base_dataset The dataframe used to extract the training set
+#'    in accordance with the date range. 
+#' @param ticker_symbol The ticker symbol to perform predictions for.
+#' @param training_start The minimum date for the records used in the training set.
+#' @param training_end The maximum date for the records used in the training set.
+#' @return The model based on Support-Vector Machine.
+SupportVectorMachineStockForecaster <- function(
+  base_dataset, ticker_symbol, training_start = NULL, training_end = NULL) {
+
+  model <- list()
+
+  # Extracting the training set from the base dataset,
+  # i.e. filtering by ticker symbol and date range
+  training_set <- filter_historical_records(
+    base_dataset, ticker_symbol, training_start, training_end) %>%
+    select(date, close)
+
+  # Fitting a Linear Regression model where
+  # 'date' is the predictor and 'close' is the predicted value
+  model$model <- train(close~date, data = training_set, method = 'svmRadial',
+                       trControl = trainControl(method = 'cv', number = 6,
+                                                summaryFunction = defaultSummary),
+                       tuneGrid = expand.grid(sigma= 2^c(-25, -20, -15,-10, -5, 0),
+                                              C= 2^c(0:5)),
+                       metric = "RMSE")
+
+  #' The predicting function
+  #'
+  #' @param from_date The initial date of the date range to predict.
+  #' @param to_date The final date of the date range to predict.
+  #' @return A dataframe containing the dates in the range to predict
+  #'    with their respective predicted closing price.
+  model$predict <- function(from_date, to_date = NULL) {
+    # If final date is null, then using the initial date, i.e predicting for 1 day
+    if (is.null(to_date)) {
+      to_date <- from_date
+    }
+
+    # Getting a dataframe containing the trading days to make predictions for
+    trading_days <- get_trading_days_in_range(from_date, to_date)
+    # Getting the predicted stock closing values
+    preds <- predict(model$model, trading_days)
+    # Creating the dataframe with the predicted values per trading day
+    data.frame(date = trading_days$date, close = preds)
+  }
+  
+  model
+}
+```
+
+In the following code a Support-Vector Machine model is created and fitted/trained using the defined training set for evaluation purposes, then it makes the predictions for the data range given for the test set. The visualization of the prediction performance can be seen in figure \ref{fig:SVMEvalPlot} and the results of the evaluation are presented in the table \ref{tab:SVMEval}.
+
+```{r svm_train_predict, eval=eval_svm_model}
+svm_forecaster <- SupportVectorMachineStockForecaster(
+  eval_sets$training, eval_ticker_symbol)
+svm_predictions <- svm_forecaster$predict(eval_test_start, eval_test_end)
+```
+
+``````{r svm_eval_plot, echo=FALSE, fig.cap="\\label{fig:SVMEvalPlot} Prediction with Support-Vector Machine", fig.height=6, fig.width=10}
+plot_predictions(eval_sets, svm_predictions,
+                 svm_forecaster$predict(eval_training_start, eval_training_end))
+```
+
+```{r svm_eval_result, results = 'asis', echo=FALSE}
+knitr::kable(get_evaluation_results('SVM', svm_predictions),
+             caption = '\\label{tab:SVMEval} Evaluation of prediction with Support-Vector Machine')
+```
+
 
 ## Time series based methods {#time_series}
 
@@ -838,5 +916,6 @@ rm(eval_define_dataset_retrieval,
    eval_define_trading_days_retrieval,
    eval_generate_training_test_sets,
    eval_linear_regression_model,
-   eval_gam_model)
+   eval_gam_model,
+   eval_svm_model)
 ```

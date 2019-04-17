@@ -7,8 +7,9 @@ if(!require(httr)) install.packages('httr')
 if(!require(jsonlite)) install.packages('jsonlite')
 if(!require(ggcorrplot)) install.packages('ggcorrplot')
 if(!require(directlabels)) install.packages('directlabels')
-if(!require(mgcv)) install.packages('mgcv')
 if(!require(caret)) install.packages('caret')
+if(!require(mgcv)) install.packages('mgcv')
+if(!require(kernlab)) install.packages('kernlab')
 if(!require(nlme)) install.packages('nlme')
 if(!require(forecast)) install.packages('forecast')
 if(!require(prophet)) install.packages('prophet')
@@ -24,8 +25,9 @@ library(ggcorrplot)
 library(directlabels)
 library(httr)
 library(jsonlite)
-library(caret)
+library(kernlab)
 library(mgcv)
+library(caret)
 library(nlme)
 library(forecast)
 library(keras)
@@ -963,5 +965,37 @@ LongShortTermMemoryStockForecaster <- function(
 # Evaluation
 #-----------------------------------
 
+# Evaluation for Linear Regression
 
+lr_forecaster <- LinearRegressionStockForecaster(eval_sets$training, eval_ticker_symbol)
+lr_predictions <- lr_forecaster$predict(eval_test_start, eval_test_end)
+
+plot_predictions(eval_sets, lr_predictions,
+                 lr_forecaster$predict(eval_training_start, eval_training_end))
+
+get_evaluation_results('Linear Regression', lr_predictions)
+
+
+# Evaluation for GAM
+
+gam_forecaster <- GeneralizedAdditiveModelStockForecaster(
+  eval_sets$training, eval_ticker_symbol)
+gam_predictions <- gam_forecaster$predict(eval_test_start, eval_test_end)
+
+plot_predictions(eval_sets, gam_predictions,
+                 gam_forecaster$predict(eval_training_start, eval_training_end))
+
+get_evaluation_results('GAM', gam_predictions)
+
+
+# Evaluation for SVM
+
+svm_forecaster <- SupportVectorMachineStockForecaster(
+  eval_sets$training, eval_ticker_symbol)
+svm_predictions <- svm_forecaster$predict(eval_test_start, eval_test_end)
+
+plot_predictions(eval_sets, svm_predictions,
+                 svm_forecaster$predict(eval_training_start, eval_training_end))
+
+get_evaluation_results('SVM', gam_predictions)
 
