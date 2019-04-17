@@ -520,6 +520,19 @@ for (i in c(1, 5, 10, 20, 40, 60, 120)) {
   #print(RMSE(preds$close[1:i], sets$test$close[1:i]))
 }
 
+# --------------------
+
+ggplot() +
+  geom_line(data = eval_sets$training, aes(x = date, y = close, color = 'Training Set')) +
+  geom_line(data = eval_sets$test, aes(x = date, y = close, color = 'Test Set')) +
+  scale_color_manual(values = c('Training Set' = 'blue', 'Test Set' = 'green')) +
+  labs(color = '') +
+  theme(legend.position = 'top')
+
+# --------------------
+results %>% spread('Number of trading days ahead', 'RMSE')
+
+# --------------------
 
 lr_forecaster <- LinearRegressionStockForecaster(eval_sets$training, eval_ticker_symbol)
 lr_predictions <- lr_forecaster$predict(eval_test_start, eval_test_end)
@@ -537,5 +550,7 @@ plot_predictions(eval_sets, gam_predictions,
                  gam_forecaster$predict(eval_training_start, eval_training_end))
 
 get_evaluation_results('GAM', gam_predictions)
+
+
 
 

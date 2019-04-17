@@ -368,6 +368,14 @@ print(sprintf('Symbol: %s, Training: [%s, %s], Test: [%s, %s]',
               eval_ticker_symbol, eval_training_start, eval_training_end,
               eval_test_start, eval_test_end))
 
+# Plotting the randomly generated training and test sets
+ggplot() +
+  geom_line(data = eval_sets$training, aes(x = date, y = close, color = 'Training Set')) +
+  geom_line(data = eval_sets$test, aes(x = date, y = close, color = 'Test Set')) +
+  scale_color_manual(values = c('Training Set' = 'blue', 'Test Set' = 'green')) +
+  labs(color = '') +
+  theme(legend.position = 'top')
+
 
 #-------------------------------------------------------
 # Useful fuctions to visualize and record the evaluation
@@ -950,5 +958,10 @@ LongShortTermMemoryStockForecaster <- function(
 
   model
 }
+
+#-----------------------------------
+# Evaluation
+#-----------------------------------
+
 
 

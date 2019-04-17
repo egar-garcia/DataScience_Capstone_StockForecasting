@@ -1,7 +1,7 @@
 ---
 title: "Stock Price Prediction Project"
 author: "Egar Garcia"
-date: "4/16/2019"
+date: "4/17/2019"
 output:
   pdf_document:
     toc: true
@@ -563,6 +563,17 @@ print(sprintf('Symbol: %s, Training: [%s, %s], Test: [%s, %s]',
               eval_test_start, eval_test_end))
 ```
 
+A visualization of the generated training and test sets, which are being used to perform the evaluation of the methods/models, can be observed in figure \ref{fig:EvalSetsPlot} and it is plotted by the next code.
+
+```{r plot_eval_sets, eval=TRUE, fig.cap="\\label{fig:EvalSetsPlot} Generated training and test sets for evaluation ", fig.height=6, fig.width=10}
+ggplot() +
+  geom_line(data = eval_sets$training, aes(x = date, y = close, color = 'Training Set')) +
+  geom_line(data = eval_sets$test, aes(x = date, y = close, color = 'Test Set')) +
+  scale_color_manual(values = c('Training Set' = 'blue', 'Test Set' = 'green')) +
+  labs(color = '') +
+  theme(legend.position = 'top')
+```
+
 ### Supporting the presentation of evaluation results
 
 In here some useful functions are defined to support the visualizations (included in this report) of the evaluation results, which are obtained after evaluate each one of the methods/models studied in this project.
@@ -813,6 +824,12 @@ knitr::kable(get_evaluation_results('GAM', gam_predictions),
 
 # Results
 
+The results of the evaluation for all the models tested in this report are gathered in table \ref{tab:Results}.
+
+```{r results_table, results = 'asis', echo=FALSE}
+knitr::kable(results %>% spread('Number of trading days ahead', 'RMSE'),
+             caption = '\\label{tab:Results} Results of the evaluation')
+```
 
 # References
 
