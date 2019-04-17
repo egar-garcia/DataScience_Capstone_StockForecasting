@@ -60,9 +60,9 @@ A stock market, also called equity market or share market, is a network of econo
 
 In the stock market, other financial securities like exchange traded funds (ETF), corporate bonds and derivatives based on stocks, commodities, currencies, bonds, etc. can be traded. However, for purpose of this project only the exchange of stocks will be considered.
 
-It is common to use stock market and stock exchange interchangeably, but the stock market is a general superset of the stock exchange. If someone is trading in the stock market, it means that it buys and sells stock/shares/equity on one (or more) of the stock exchange(s) that are part of the overall stock market.
+It is common to use stock market and stock exchange interchangeably, but the stock market is a general super set of the stock exchange. If someone is trading in the stock market, it means that it buys and sells stock/shares/equity on one (or more) of the stock exchange(s) that are part of the overall stock market.
 
-The stock market offers an opportunity to investors to increase their income without the high risk of entering into their own businesses with high overheads and startup costs. On the other hand, selling stocks helps companies themselves to expand exponentially, when a company’s shares are purchased it is generally associated with the increased in the company’s worth. Therefore, trading on the stock market can be a win-win for both investor and owner.
+The stock market offers an opportunity to investors to increase their income without the high risk of entering into their own businesses with high overheads and start up costs. On the other hand, selling stocks helps companies themselves to expand exponentially, when a company’s shares are purchased it is generally associated with the increased in the company’s worth. Therefore, trading on the stock market can be a win-win for both investor and owner.
 
 The stock exchange that are leading the U.S. include the New York Stock Exchange (NYSE), Nasdaq, BATS and Chicago Board Options Exchange (CBOE). The Dow Jones Industrial Average (DJIA) is a price-weighted average of 30 significant stocks traded on the NYSE and the Nasdaq, it is the most closely watched market indicator in the world and it is generally perceived to mirror the state of American economy.
 
@@ -154,7 +154,7 @@ For example, in a 5 years period from 2014-04-14 to 2019-04-12, there are 1259 h
 
 ## Dataset retrieval
 
-The strategy to retrieve the dataset is to get the historical stock price records for each one of the 30 stocks in the Dow Jones (the list of stocks is retrieved from the file `dow_jones_stocks.csv`), plus the ones for the Dow Jones Industrial Average, and then combining them in a single data-frame.
+The strategy to retrieve the dataset is to get the historical stock price records for each one of the 30 stocks in the Dow Jones (the list of stocks is retrieved from the file `dow_jones_stocks.csv`), plus the ones for the Dow Jones Industrial Average, and then combining them in a single dataframe.
 
 For the historical stock price records only the columns `date` and `close` are picked, and one new column `symbol` is added to indicate the ticker symbol of the company which the record belongs to.
 
@@ -398,7 +398,7 @@ dow_jones_historical_records %>%
 
 When looking at the stocks one at a time, it seems like the stock prices fluctuates a lot and a clear pattern is not perceived, at least not at a human comprehensible level. This is understandable since the stock prices depend on a lot of different factors like the company's financial health, economic supply-demand and even involving human emotions like trust, euphoria or panic.
 
-At a macro level it can be observed that they are common events that seem to affect the stock prices as a whole, like a rise and sudden fall of prices around the beginning of 2018, or a generalized drop on the stock prices at the end of 2018. However these kind of events also do not seem to have a (humanly) comprehensible pattern either.
+At a macro level it can be observed that they are common events that seem to affect the stock prices as a whole, like a rise and sudden fall of prices around the beginning of 2018, or a generalized drop on the stock prices at the end of 2018. However these kind of events also do not seem to have a (humanly) comprehensible pattern either, here is where machine learning methods can provide a lot help to face the forecasting problem. 
 
 
 # Methods
@@ -407,7 +407,7 @@ A normal machine learning dataset is a collection of observations where time doe
 
 A time series dataset is different, because they have an explicit dependence of the order between observations, thus the time plays a main role. For these datasets the time is both a constraint and also a structure that provides additional information. During the exploration of the dataset it was realized that the only data that we can know a priory and use to make the predictions are the dates, then this characteristic makes the problem to forecast the stock closing prices to be a time series forecasting problem.
 
-Even though the problem of forecasting stocks can be seen as a particular case of time series forecasting, in the ["Classical ML methods"]{#classical_ml} section some classical (or general purpose) machine learning methods are used to attempt giving a solution to the stock forecaster problem. Then in the ["Time series based methods"]{#time_series} specific methods to forecast time series are applied to address the problem. Both kind of methods are going to be evaluted and analized in this report.
+Even though the problem of forecasting stocks can be seen as a particular case of time series forecasting, in the ["Classical ML methods"]{#classical_ml} section some classical (or general purpose) machine learning methods are used to attempt giving a solution to the stock forecaster problem. Then in the ["Time series based methods"]{#time_series} specific methods to forecast time series are applied to address the problem. Both kind of methods are going to be evaluated and analyzed in this report.
 
 ## Evaluation methodology
 
@@ -417,7 +417,7 @@ To generate a model, the constructor function receives a training set consisting
 
 The evaluation consist in randomly select a date range for training, it should contain 750 trading days (which is around 3 years of historical records) and being old enough to leave at least 120 trading days in the dataset following the training end date to use for validation. Also it is selected a random ticker symbol in the Dow Jones, except 'DOW', because it doesn't have enough historical records to do an evaluation with 750 trading days back.
 
-The performance of prediction is based on the RMSE, which is calculated agains the ground truth in the test set for the following 1, 5, 10, 20, 40, 60 and 120 trading days after the training end date.
+The performance of prediction is based on the RMSE, which is calculated against the ground truth in the test set for the following 1, 5, 10, 20, 40, 60 and 120 trading days after the training end date.
 
 ## Preparation
 
@@ -641,9 +641,9 @@ Linear Regression is the first and most naive machine learning method to impleme
 
 For this project's problem, Linear Regression follows the model:
 $$
-c = \alpha d + \beta
+\hat{c} = \alpha d + \beta
 $$
-where $c$ is the closing price of a stock for a specific trading day's date $d$ (actually a numerical representation of the date). $\alpha$ and $\beta$ are the linear coeficients (slope and intercept).
+where $\hat{c}$ is the predicted closing price of a stock for a specific trading day's date $d$ (actually a numerical representation of the date). $\alpha$ and $\beta$ are the linear coefficients (slope and intercept).
 
 The following code is the implementation of the model based on Linear Regression.
 
@@ -696,7 +696,7 @@ LinearRegressionStockForecaster <- function(
 }
 ```
 
-In the following code a Linear Regression model is created and fitted/trained using the defined training set for evaliation purposes, then it makes the predictions for the data range given for the test set. The visualization of the prediction performance can be seen in figure \ref{fig:LinearRegressionEvalPlot} and the results of the evaluation are presented in the table \ref{tab:LinearRegressionEval}.
+In the following code a Linear Regression model is created and fitted/trained using the defined training set for evaluation purposes, then it makes the predictions for the data range given for the test set. The visualization of the prediction performance can be seen in figure \ref{fig:LinearRegressionEvalPlot} and the results of the evaluation are presented in the table \ref{tab:LinearRegressionEval}.
 
 ```{r linear_regression_train_predict, eval=eval_linear_regression_model}
 lr_forecaster <- LinearRegressionStockForecaster(eval_sets$training, eval_ticker_symbol)
@@ -719,11 +719,11 @@ Generalized Additive Models (GAMs) are a way to model non-linear responses with 
 
 For this project's problem, a GAM model looks like:
 $$
-c = a + f(d)
+\hat{c} = a + f(d)
 $$
-where $c$ is the closing price of a stock for a specific trading day's date $d$ (actually a numerical representation of the date), $a$ is a numeric constant and $f$ is a smooth curve function build up from polynomials.
+where $\hat{c}$ is the predicted closing price of a stock for a specific trading day's date $d$ (actually a numerical representation of the date), $a$ is a numeric constant and $f$ is a spline (i.e. a smooth curve function build up from polynomials).
 
-The following code is the implementation of the model based on GAM, the package `caret` is being used to perform the tunning of the parameters.
+The following code is the implementation of the model based on GAM, the package `caret` is being used to perform the tuning of the parameters.
 
 ```{r gam_model, eval=eval_gam_model}
 #' This function represents a constructor 
@@ -780,7 +780,7 @@ GeneralizedAdditiveModelStockForecaster <- function(
 }
 ```
 
-In the following code a Generalized Additive Model is created and fitted/trained using the defined training set for evaliation purposes, then it makes the predictions for the data range given for the test set. The visualization of the prediction performance can be seen in figure \ref{fig:GAMEvalPlot} and the results of the evaluation are presented in the table \ref{tab:GAMEval}.
+In the following code a Generalized Additive Model is created and fitted/trained using the defined training set for evaluation purposes, then it makes the predictions for the data range given for the test set. The visualization of the prediction performance can be seen in figure \ref{fig:GAMEvalPlot} and the results of the evaluation are presented in the table \ref{tab:GAMEval}.
 
 ```{r gam_train_predict, eval=eval_gam_model}
 gam_forecaster <- GeneralizedAdditiveModelStockForecaster(
@@ -800,6 +800,8 @@ knitr::kable(get_evaluation_results('GAM', gam_predictions),
 
 
 ### Support Vector Machine
+
+[@support-vector-networks]
 
 ## Time series based methods {#time_series}
 
