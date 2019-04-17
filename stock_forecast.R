@@ -7,6 +7,7 @@ if(!require(httr)) install.packages('httr')
 if(!require(jsonlite)) install.packages('jsonlite')
 if(!require(ggcorrplot)) install.packages('ggcorrplot')
 if(!require(directlabels)) install.packages('directlabels')
+if(!require(mgcv)) install.packages('mgcv')
 if(!require(caret)) install.packages('caret')
 if(!require(nlme)) install.packages('nlme')
 if(!require(forecast)) install.packages('forecast')
@@ -24,6 +25,7 @@ library(directlabels)
 library(httr)
 library(jsonlite)
 library(caret)
+library(mgcv)
 library(nlme)
 library(forecast)
 library(keras)
@@ -404,7 +406,7 @@ plot_predictions <- function(sets, predictions, training_predictions = NULL) {
 #' Creates an empty dataframe to report the evaluation results
 create_results_dataframe <- function() {
   data.frame('Method' = character(),
-             'Number of Trading Days' = integer(), 
+             'Number of trading days ahead' = integer(), 
              'RMSE' = numeric(),
              stringsAsFactors = FALSE, check.names = FALSE)
 }
@@ -421,7 +423,7 @@ get_evaluation_results <- function(method, predictions) {
   for (i in c(1, 5, 10, 20, 40, 60, 120)) {
     n <- nrow(eval_results) + 1
     eval_results[n, 'Method'] <- method
-    eval_results[n, 'Number of Trading Days'] <- i
+    eval_results[n, 'Number of trading days ahead'] <- i
     eval_results[n, 'RMSE'] <- RMSE(predictions$close[1:i], eval_sets$test$close[1:i])
   }
   
@@ -496,26 +498,25 @@ LinearRegressionStockForecaster <- function(
 #' @return The model based on Generalized Additive Model.
 GeneralizedAdditiveModelStockForecaster <- function(
   base_dataset, ticker_symbol, training_start = NULL, training_end = NULL) {
-
+  
   model <- list()
-
+  
   # Extracting the training set from the base dataset,
   # i.e. filtering by ticker symbol and date range
   training_set <- filter_historical_records(
     base_dataset, ticker_symbol, training_start, training_end) %>%
     select(date, close)
-
-  # Fitting a GBM model using caret to tune the parameters,
+  
+  # Fitting a GAM model using caret to tune the parameters,
   # 'date' is the predictor and 'close' is the predicted value
-  model$model <- train(close~date, data = training_set, method = 'gbm',
+  model$model <- train(close~date, data = training_set, method = 'gam',
                        trControl = trainControl(method = 'cv', number = 6,
                                                 summaryFunction = defaultSummary),
-                       tuneGrid = expand.grid( n.trees = seq(50, 1000, 50), 
-                                               interaction.depth = c(30),
-                                               shrinkage = c(0.1),
-                                               n.minobsinnode = c(1, 10, 50)),
+                       tuneGrid = expand.grid(select = c(TRUE, FALSE),
+                                              method = c("GCV.Cp", "REML", "P-REML",
+                                                         "ML", "P-ML")),
                        metric = 'RMSE')
-
+  
   #' The predicting function
   #'
   #' @param from_date The initial date of the date range to predict.
@@ -527,7 +528,7 @@ GeneralizedAdditiveModelStockForecaster <- function(
     if (is.null(to_date)) {
       to_date <- from_date
     }
-
+    
     # Getting a dataframe containing the trading days to make predictions for
     trading_days <- get_trading_days_in_range(from_date, to_date)
     # Getting the predicted stock closing values

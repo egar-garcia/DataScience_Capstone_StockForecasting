@@ -1,7 +1,7 @@
 ---
 title: "Stock Price Prediction Project"
 author: "Egar Garcia"
-date: "4/13/2019"
+date: "4/16/2019"
 output:
   pdf_document:
     toc: true
@@ -44,6 +44,11 @@ eval_linear_regression_model <-
   !exists('LinearRegressionStockForecaster') |
   !exists('lr_forecaster') |
   !exists('lr_predictions')
+
+eval_gam_model <-
+  !exists('GeneralizedAdditiveModelStockForecaster') |
+  !exists('gam_forecaster') |
+  !exists('gam_predictions')
 ```
 
 
@@ -398,6 +403,12 @@ At a macro level it can be observed that they are common events that seem to aff
 
 # Methods
 
+A normal machine learning dataset is a collection of observations where time does not necessarily play a main role, predictions are made for new/unknown data (which might be considered as predicting the future), however all the prior observations are pretty much treated equally, and the order or the observations is not taken in consideration, even is a good practice to shuffle the observations to perform the training.
+
+A time series dataset is different, because they have an explicit dependence of the order between observations, thus the time plays a main role. For these datasets the time is both a constraint and also a structure that provides additional information. During the exploration of the dataset it was realized that the only data that we can know a priory and use to make the predictions are the dates, then this characteristic makes the problem to forecast the stock closing prices to be a time series forecasting problem.
+
+Even though the problem of forecasting stocks can be seen as a particular case of time series forecasting, in the ["Classical ML methods"]{#classical_ml} section some classical (or general purpose) machine learning methods are used to attempt giving a solution to the stock forecaster problem. Then in the ["Time series based methods"]{#time_series} specific methods to forecast time series are applied to address the problem. Both kind of methods are going to be evaluted and analized in this report.
+
 ## Evaluation methodology
 
 To evaluate the different (machine learning) methods tested in this project, an object-oriented approach is used, each method is going to be represented by a model which would be generated through the construction of an object.
@@ -552,7 +563,7 @@ print(sprintf('Symbol: %s, Training: [%s, %s], Test: [%s, %s]',
               eval_test_start, eval_test_end))
 ```
 
-### Supporting the display of evaluation results
+### Supporting the presentation of evaluation results
 
 In here some useful functions are defined to support the visualizations (included in this report) of the evaluation results, which are obtained after evaluate each one of the methods/models studied in this project.
 
@@ -595,7 +606,7 @@ The following code creates a dataframe to store the evaluation results for all t
 #' Creates an empty dataframe to report the evaluation results
 create_results_dataframe <- function() {
   data.frame('Method' = character(),
-             'Number of Trading Days' = integer(), 
+             'Number of trading days ahead' = integer(), 
              'RMSE' = numeric(),
              stringsAsFactors = FALSE, check.names = FALSE)
 }
@@ -612,7 +623,7 @@ get_evaluation_results <- function(method, predictions) {
   for (i in c(1, 5, 10, 20, 40, 60, 120)) {
     n <- nrow(eval_results) + 1
     eval_results[n, 'Method'] <- method
-    eval_results[n, 'Number of Trading Days'] <- i
+    eval_results[n, 'Number of trading days ahead'] <- i
     eval_results[n, 'RMSE'] <- RMSE(predictions$close[1:i], eval_sets$test$close[1:i])
   }
   
@@ -622,11 +633,19 @@ get_evaluation_results <- function(method, predictions) {
 }
 ```
 
-## Classical ML methods
-
-[@lstm]
+## Classical ML methods {#classical_ml}
 
 ### Linear Regression
+
+Linear Regression is the first and most naive machine learning method to implement, the idea is just to obtain the regression line for the closing prices against the dates. Linear Regression is is a very popular method used in several domains, in spite of its simplicity it can be be very useful as a reference to benchmark the performance of the other method.
+
+For this project's problem, Linear Regression follows the model:
+$$
+c = \alpha d + \beta
+$$
+where $c$ is the closing price of a stock for a specific trading day's date $d$ (actually a numerical representation of the date). $\alpha$ and $\beta$ are the linear coeficients (slope and intercept).
+
+The following code is the implementation of the model based on Linear Regression.
 
 ```{r linear_regression_model, eval=eval_linear_regression_model}
 #' This function represents a constructor 
@@ -677,32 +696,118 @@ LinearRegressionStockForecaster <- function(
 }
 ```
 
+In the following code a Linear Regression model is created and fitted/trained using the defined training set for evaliation purposes, then it makes the predictions for the data range given for the test set. The visualization of the prediction performance can be seen in figure \ref{fig:LinearRegressionEvalPlot} and the results of the evaluation are presented in the table \ref{tab:LinearRegressionEval}.
+
 ```{r linear_regression_train_predict, eval=eval_linear_regression_model}
 lr_forecaster <- LinearRegressionStockForecaster(eval_sets$training, eval_ticker_symbol)
 lr_predictions <- lr_forecaster$predict(eval_test_start, eval_test_end)
 ```
-
-In figure \ref{fig:LinearRegressionEvalPlot}
 
 ``````{r linear_regression_eval_plot, echo=FALSE, fig.cap="\\label{fig:LinearRegressionEvalPlot} Prediction with Linear Regression", fig.height=6, fig.width=10}
 plot_predictions(eval_sets, lr_predictions,
                  lr_forecaster$predict(eval_training_start, eval_training_end))
 ```
 
-In \ref{tab:LinearRegressionEval}.
-
 ```{r linear_regression_eval_result, results = 'asis', echo=FALSE}
 knitr::kable(get_evaluation_results('Linear Regression', lr_predictions),
-             caption = '\\label{tab:LinearRegressionEval} Evaluation of Linear Regression')
+             caption = '\\label{tab:LinearRegressionEval} Evaluation of prediction with Linear Regression')
 ```
 
 ### Generalized Additive Model
 
+Generalized Additive Models (GAMs) are a way to model non-linear responses with in the framework of a linear logistic model or other generalized linear model, i.e. GAM relaxes the linearity constraint by finding a set of smooth curve functions applied to the predictors and a constant term $a$, such that the model is represented by the sum of them [@practical_data_science_with_r].
+
+For this project's problem, a GAM model looks like:
+$$
+c = a + f(d)
+$$
+where $c$ is the closing price of a stock for a specific trading day's date $d$ (actually a numerical representation of the date), $a$ is a numeric constant and $f$ is a smooth curve function build up from polynomials.
+
+The following code is the implementation of the model based on GAM, the package `caret` is being used to perform the tunning of the parameters.
+
+```{r gam_model, eval=eval_gam_model}
+#' This function represents a constructor 
+#' for a stock forecaster model based on Generalized Additive Model.
+#'
+#' @param base_dataset The dataframe used to extract the training set
+#'    in accordance with the date range. 
+#' @param ticker_symbol The ticker symbol to perform predictions for.
+#' @param training_start The minimum date for the records used in the training set.
+#' @param training_end The maximum date for the records used in the training set.
+#' @return The model based on Generalized Additive Model.
+GeneralizedAdditiveModelStockForecaster <- function(
+  base_dataset, ticker_symbol, training_start = NULL, training_end = NULL) {
+
+  model <- list()
+
+  # Extracting the training set from the base dataset,
+  # i.e. filtering by ticker symbol and date range
+  training_set <- filter_historical_records(
+    base_dataset, ticker_symbol, training_start, training_end) %>%
+    select(date, close)
+
+  # Fitting a GAM model using caret to tune the parameters,
+  # 'date' is the predictor and 'close' is the predicted value
+  model$model <- train(close~date, data = training_set, method = 'gam',
+                       trControl = trainControl(method = 'cv', number = 6,
+                                                summaryFunction = defaultSummary),
+                       tuneGrid = expand.grid(select = c(TRUE, FALSE),
+                                              method = c("GCV.Cp", "REML", "P-REML",
+                                                         "ML", "P-ML")),
+                       metric = 'RMSE')
+
+  #' The predicting function
+  #'
+  #' @param from_date The initial date of the date range to predict.
+  #' @param to_date The final date of the date range to predict.
+  #' @return A dataframe containing the dates in the range to predict
+  #'    with their respective predicted closing price.
+  model$predict <- function(from_date, to_date = NULL) {
+    # If final date is null, then using the initial date, i.e predicting for 1 day
+    if (is.null(to_date)) {
+      to_date <- from_date
+    }
+
+    # Getting a dataframe containing the trading days to make predictions for
+    trading_days <- get_trading_days_in_range(from_date, to_date)
+    # Getting the predicted stock closing values
+    preds <- predict(model$model, trading_days)
+    # Creating the dataframe with the predicted values per trading day
+    data.frame(date = trading_days$date, close = preds)
+  }
+  
+  model
+}
+```
+
+In the following code a Generalized Additive Model is created and fitted/trained using the defined training set for evaliation purposes, then it makes the predictions for the data range given for the test set. The visualization of the prediction performance can be seen in figure \ref{fig:GAMEvalPlot} and the results of the evaluation are presented in the table \ref{tab:GAMEval}.
+
+```{r gam_train_predict, eval=eval_gam_model}
+gam_forecaster <- GeneralizedAdditiveModelStockForecaster(
+  eval_sets$training, eval_ticker_symbol)
+gam_predictions <- gam_forecaster$predict(eval_test_start, eval_test_end)
+```
+
+``````{r gam_eval_plot, echo=FALSE, fig.cap="\\label{fig:GAMEvalPlot} Prediction with Generalized Additive Model", fig.height=6, fig.width=10}
+plot_predictions(eval_sets, gam_predictions,
+                 gam_forecaster$predict(eval_training_start, eval_training_end))
+```
+
+```{r gam_eval_result, results = 'asis', echo=FALSE}
+knitr::kable(get_evaluation_results('GAM', gam_predictions),
+             caption = '\\label{tab:GAMEval} Evaluation of prediction with Generalized Additive Model')
+```
+
+
 ### Support Vector Machine
 
-## Time series based methods
+## Time series based methods {#time_series}
 
 ### Moving average
+
+### Long Short-Term Memory
+
+[@lstm]
 
 # Results
 
@@ -713,5 +818,6 @@ knitr::kable(get_evaluation_results('Linear Regression', lr_predictions),
 rm(eval_define_dataset_retrieval,
    eval_define_trading_days_retrieval,
    eval_generate_training_test_sets,
-   eval_linear_regression_model)
+   eval_linear_regression_model,
+   eval_gam_model)
 ```

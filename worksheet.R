@@ -529,3 +529,13 @@ plot_predictions(eval_sets, lr_predictions,
 
 get_evaluation_results('Linear Regression', lr_predictions)
 
+
+gam_forecaster <- GeneralizedAdditiveModelStockForecaster(eval_sets$training, eval_ticker_symbol)
+gam_predictions <- gam_forecaster$predict(eval_test_start, eval_test_end)
+
+plot_predictions(eval_sets, gam_predictions,
+                 gam_forecaster$predict(eval_training_start, eval_training_end))
+
+get_evaluation_results('GAM', gam_predictions)
+
+
