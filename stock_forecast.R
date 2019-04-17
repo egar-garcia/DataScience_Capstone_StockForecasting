@@ -335,33 +335,37 @@ get_train_and_test_sets <- function(
 #-------------------------------------------------------
 
 # Choosing a random ticker symbol, except 'DOW' since it doesn't have enough data
-random_ticker_symbol <- sample(filter(dow_jones_stocks, symbol != 'DOW')$symbol , 1)
+eval_ticker_symbol <- sample(filter(dow_jones_stocks, symbol != 'DOW')$symbol , 1)
 # Getting the available dates for that ticker symbol
-random_dates <- filter(dow_jones_historical_records, symbol == random_ticker_symbol)
+random_dates <- filter(dow_jones_historical_records, symbol == eval_ticker_symbol)
 # Getting a random training end date such as there are 
 # at least 750 historical records up to it (for training) and
 # at least 120 after (for testing )
-idx_random_end_training <- sample(750:(nrow(random_dates) - 120), 1)
-random_end_training <- random_dates[idx_random_end_training, 'date']
+random_idx_end_training <- sample(750:(nrow(random_dates) - 120), 1)
+eval_training_end <- random_dates[random_idx_end_training, 'date']
 # Calculating the training start date such as there are 750 records for training set
-random_start_training <- random_dates[(idx_random_end_training - 750 + 1), 'date']
+eval_training_start <- random_dates[(random_idx_end_training - 750 + 1), 'date']
 
 # Extracting train and test sets
-sets <- get_train_and_test_sets(dow_jones_historical_records,
-                                random_ticker_symbol,
-                                random_start_training,
-                                random_end_training,
-                                120)
+eval_sets <- get_train_and_test_sets(dow_jones_historical_records,
+                                     eval_ticker_symbol,
+                                     eval_training_start,
+                                     eval_training_end,
+                                     120)
+
+# Getting the test date range
+eval_test_start <- min(eval_sets$test$date)
+eval_test_end <- max(eval_sets$test$date)
 
 # Cleaning intermediate variables
-rm(random_ticker_symbol, random_dates,
-   idx_random_end_training, random_end_training, random_start_training)
+rm(random_dates, random_idx_end_training)
 
 
 # Printing the values obtained by the random selection
 print(sprintf('Symbol: %s, Training: [%s, %s], Test: [%s, %s]',
-              sets$symbol, min(sets$training$date), max(sets$training$date),
-              min(sets$test$date), max(sets$test$date)))
+              eval_ticker_symbol, eval_training_start, eval_training_end,
+              eval_test_start, eval_test_end))
+
 
 #-------------------------------------------------------
 # Useful fuctions to visualize and record the evaluation
@@ -418,7 +422,7 @@ get_evaluation_results <- function(method, predictions) {
     n <- nrow(eval_results) + 1
     eval_results[n, 'Method'] <- method
     eval_results[n, 'Number of Trading Days'] <- i
-    eval_results[n, 'RMSE'] <- RMSE(predictions$close[1:i], sets$test$close[1:i])
+    eval_results[n, 'RMSE'] <- RMSE(predictions$close[1:i], eval_sets$test$close[1:i])
   }
   
   results <<- rbind(results, eval_results)

@@ -499,8 +499,11 @@ get_evaluation_results <- function(method, predictions) {
   eval_results <- create_results_dataframe()
 
   for (i in c(1, 5, 10, 20, 40, 60, 120)) {
-    eval_results[(nrow(eval_results) + 1), ] <-
-      c(method, i, RMSE(predictions$close[1:i], sets$test$close[1:i]))
+    n <- nrow(eval_results) + 1
+    eval_results[n, 'Method'] <- method
+    eval_results[n, 'Number of Trading Days'] <- i
+    eval_results[n, 'RMSE'] <- RMSE(predictions$close[1:i], sets$test$close[1:i])
+    #c(method, i, RMSE(predictions$close[1:i], sets$test$close[1:i]))
   }
 
   results <<- rbind(results, eval_results)
@@ -518,11 +521,11 @@ for (i in c(1, 5, 10, 20, 40, 60, 120)) {
 }
 
 
-lr_forecaster <- LinearRegressionStockForecaster(sets$training, sets$symbol)
-lr_predictions <- lr_forecaster$predict(min(sets$test$date), max(sets$test$date))
+lr_forecaster <- LinearRegressionStockForecaster(eval_sets$training, eval_ticker_symbol)
+lr_predictions <- lr_forecaster$predict(eval_test_start, eval_test_end)
 
-plot_predictions(sets, lr_predictions,
-                 lr_forecaster$predict(min(sets$training$date), max(sets$training$date)))
+plot_predictions(eval_sets, lr_predictions,
+                 lr_forecaster$predict(eval_training_start, eval_training_end))
 
 get_evaluation_results('Linear Regression', lr_predictions)
 

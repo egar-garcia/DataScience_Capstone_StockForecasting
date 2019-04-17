@@ -9,6 +9,8 @@ output:
     number_sections: true
     fig_width: 7
     fig_height: 4.33
+  bibliography: bibliography.bib
+  csl: ieee-with-url.csl
 ---
 
 
@@ -31,7 +33,12 @@ eval_define_trading_days_retrieval <-
 
 eval_generate_training_test_sets <-
   !exists('get_train_and_test_sets') |
-  !exists('sets')
+  !exists('eval_ticker_symbol') |
+  !exists('eval_sets') |
+  !exists('eval_training_start') |
+  !exists('eval_training_end') |
+  !exists('eval_test_start') |
+  !exists('eval_test_end')
 
 eval_linear_regression_model <-
   !exists('LinearRegressionStockForecaster') |
@@ -510,35 +517,39 @@ The following is the code to do the random selection of the ticker symbol and da
 
 ```{r generate_random_training_test_sets, eval=eval_generate_training_test_sets}
 # Choosing a random ticker symbol, except 'DOW' since it doesn't have enough data
-random_ticker_symbol <- sample(filter(dow_jones_stocks, symbol != 'DOW')$symbol , 1)
+eval_ticker_symbol <- sample(filter(dow_jones_stocks, symbol != 'DOW')$symbol , 1)
 # Getting the available dates for that ticker symbol
-random_dates <- filter(dow_jones_historical_records, symbol == random_ticker_symbol)
+random_dates <- filter(dow_jones_historical_records, symbol == eval_ticker_symbol)
 # Getting a random training end date such as there are 
 # at least 750 historical records up to it (for training) and
 # at least 120 after (for testing )
-idx_random_end_training <- sample(750:(nrow(random_dates) - 120), 1)
-random_end_training <- random_dates[idx_random_end_training, 'date']
+random_idx_end_training <- sample(750:(nrow(random_dates) - 120), 1)
+eval_training_end <- random_dates[random_idx_end_training, 'date']
 # Calculating the training start date such as there are 750 records for training set
-random_start_training <- random_dates[(idx_random_end_training - 750 + 1), 'date']
+eval_training_start <- random_dates[(random_idx_end_training - 750 + 1), 'date']
 
 # Extracting train and test sets
-sets <- get_train_and_test_sets(dow_jones_historical_records,
-                                random_ticker_symbol,
-                                random_start_training,
-                                random_end_training,
-                                120)
+eval_sets <- get_train_and_test_sets(dow_jones_historical_records,
+                                     eval_ticker_symbol,
+                                     eval_training_start,
+                                     eval_training_end,
+                                     120)
+
+# Getting the test date range
+eval_test_start <- min(eval_sets$test$date)
+eval_test_end <- max(eval_sets$test$date)
 
 # Cleaning intermediate variables
-rm(random_ticker_symbol, random_dates,
-   idx_random_end_training, random_end_training, random_start_training)
+rm(random_dates, random_idx_end_training)
 ```
 
 The result of the random selection used for evaluation purposes can be seen by running the following code.
 
 ```{r result_of_random_selection, eval=TRUE}
+# Printing the values obtained by the random selection
 print(sprintf('Symbol: %s, Training: [%s, %s], Test: [%s, %s]',
-              sets$symbol, min(sets$training$date), max(sets$training$date),
-              min(sets$test$date), max(sets$test$date)))
+              eval_ticker_symbol, eval_training_start, eval_training_end,
+              eval_test_start, eval_test_end))
 ```
 
 ### Supporting the display of evaluation results
@@ -597,21 +608,23 @@ results <- create_results_dataframe()
 #' adding them to the dataframe that contains all the results.
 get_evaluation_results <- function(method, predictions) {
   eval_results <- create_results_dataframe()
-
+  
   for (i in c(1, 5, 10, 20, 40, 60, 120)) {
     n <- nrow(eval_results) + 1
     eval_results[n, 'Method'] <- method
     eval_results[n, 'Number of Trading Days'] <- i
-    eval_results[n, 'RMSE'] <- RMSE(predictions$close[1:i], sets$test$close[1:i])
+    eval_results[n, 'RMSE'] <- RMSE(predictions$close[1:i], eval_sets$test$close[1:i])
   }
-
+  
   results <<- rbind(results, eval_results)
-
+  
   eval_results %>% select(-'Method')
 }
 ```
 
 ## Classical ML methods
+
+[@lstm]
 
 ### Linear Regression
 
@@ -665,15 +678,15 @@ LinearRegressionStockForecaster <- function(
 ```
 
 ```{r linear_regression_train_predict, eval=eval_linear_regression_model}
-lr_forecaster <- LinearRegressionStockForecaster(sets$training, sets$symbol)
-lr_predictions <- lr_forecaster$predict(min(sets$test$date), max(sets$test$date))
+lr_forecaster <- LinearRegressionStockForecaster(eval_sets$training, eval_ticker_symbol)
+lr_predictions <- lr_forecaster$predict(eval_test_start, eval_test_end)
 ```
 
 In figure \ref{fig:LinearRegressionEvalPlot}
 
 ``````{r linear_regression_eval_plot, echo=FALSE, fig.cap="\\label{fig:LinearRegressionEvalPlot} Prediction with Linear Regression", fig.height=6, fig.width=10}
-plot_predictions(sets, lr_predictions,
-                 lr_forecaster$predict(min(sets$training$date), max(sets$training$date)))
+plot_predictions(eval_sets, lr_predictions,
+                 lr_forecaster$predict(eval_training_start, eval_training_end))
 ```
 
 In \ref{tab:LinearRegressionEval}.
@@ -693,12 +706,8 @@ knitr::kable(get_evaluation_results('Linear Regression', lr_predictions),
 
 # Results
 
-In table \ref{tab:Results}.
 
-```{r results_table, results = 'asis', echo=FALSE}
-knitr::kable(results, caption = '\\label{tab:Results} Results')
-```
-
+# References
 
 ```{r clean_up, include=FALSE}
 rm(eval_define_dataset_retrieval,
