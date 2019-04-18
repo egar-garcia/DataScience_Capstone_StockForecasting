@@ -30,6 +30,7 @@ library(mgcv)
 library(caret)
 library(nlme)
 library(forecast)
+library(prophet)
 library(keras)
 
 # Install Keras if you have not installed before
@@ -947,7 +948,37 @@ arima_predictions <- arima_forecaster$predict(eval_test_start, eval_test_end)
 
 plot_predictions(eval_sets, arima_predictions)
 
-get_evaluation_results('ARIMA', lr_predictions)
+get_evaluation_results('ARIMA', arima_predictions)
 
+
+# Evaluation of Prophet
+
+prophet_forecaster <- ProphetStockForecaster(eval_sets$training, eval_ticker_symbol)
+prophet_predictions <- prophet_forecaster$predict(eval_test_start, eval_test_end)
+
+plot_predictions(eval_sets, prophet_predictions,
+                 prophet_forecaster$predict(eval_training_start, eval_training_end))
+
+get_evaluation_results('Prophet', prophet_predictions)
+
+
+# Evaluation of Prophet
+
+lstm_forecaster <- LongShortTermMemoryStockForecaster(eval_sets$training, eval_ticker_symbol)
+
+lstm_predictions <- lstm_forecaster$predict(eval_test_start, eval_test_end)
+
+plot_predictions(eval_sets, lstm_predictions,
+                 lstm_forecaster$predict(eval_sets$training[61,]$date, eval_training_end))
+
+get_evaluation_results('LSTM', lstm_predictions)
+
+lstm_daily_predictions <- lstm_forecaster$predict(eval_test_start, eval_test_end,
+                                                  base_dataset = dow_jones_historical_records)
+
+plot_predictions(eval_sets, lstm_daily_predictions,
+                 lstm_forecaster$predict(eval_sets$training[61,]$date, eval_training_end))
+
+get_evaluation_results('LSTM - Daily Updated', lstm_daily_predictions)
 
 

@@ -59,6 +59,11 @@ eval_arima_model <-
   !exists('ArimaStockForecaster') |
   !exists('arima_forecaster') |
   !exists('arima_predictions')
+
+eval_prophet_model <-
+  !exists('ProphetStockForecaster') |
+  !exists('prophet_forecaster') |
+  !exists('prophet_predictions')
 ```
 
 
@@ -933,7 +938,9 @@ The mathematical equations to describe ARIMA models are fairly complex and beyon
 * $q$: Past forecast errors used to predict the future values.
 * $d$: Order of differencing.
 
-Parameter tuning for ARIMA consumes a lot of time, fortunately the module "Auto ARIMA" (used for this project) is available and has the advantage of automatically selecting the best combination of the values of (p, q, d) that provides the least error, this selection is done during the fitting process.
+Parameter tuning for ARIMA consumes a lot of time, fortunately the module "Auto ARIMA" (used for this project) is available and has the advantage of automatically selecting the best combination of the values of ($p$, $q$, $d$) that provides the least error, this selection is done during the fitting process.
+
+To be fitted, ARIMA only needs a sequence of ground truth consecutive values in the time series to do the training, then to prepare the training set only the column `close` needs to be selected, however an important aspect is that the order must be preserved.
 
 The following code is the implementation of the model based on ARIMA using `auto.arima` to automatically tune the parameters.
 
@@ -1022,13 +1029,98 @@ plot_predictions(eval_sets, arima_predictions)
 ```
 
 ```{r arima_eval_result, results = 'asis', echo=FALSE}
-knitr::kable(get_evaluation_results('ARIMA', lr_predictions),
+knitr::kable(get_evaluation_results('ARIMA', arima_predictions),
              caption = '\\label{tab:ARIMAEval} Evaluation of prediction with ARIMA')
+```
+
+### Prophet
+
+Prophet is an open source forecasting tool developed by Facebook, it is optimized for the business forecast tasks encountered at Facebook. They claim that the default settings produce forecasts that are often as accurate as those produced by skilled forecasters, with much less effort [@prophet_facebook].
+
+For training, this model receives the date as predictor and the ground truth of the value to predict as outcome, however their columns should be named `ds` and `y` respectively.
+
+The following code is the implementation of the model based on Prophet, the parameter `daily.seasonality` is turned on to reflect that the time series to forecast are based on time steps of days.
+
+```{r prophet_model, eval=eval_prophet_model}
+#' This function represents a constructor 
+#' for a stock forecaster model based on Prophet.
+#'
+#' @param base_dataset The dataframe used to extract the training set
+#'    in accordance with the date range. 
+#' @param ticker_symbol The ticker symbol to perform predictions for.
+#' @param training_start The minimum date for the records used in the training set.
+#' @param training_end The maximum date for the records used in the training set.
+#' @return The model based on Prophet
+ProphetStockForecaster <- function(
+  base_dataset, ticker_symbol, start_date = NULL, end_date = NULL) {
+
+  model <- list()
+
+  # Extracting the training set from the base dataset)
+  # (i.e. filtering by ticker symbol and date range),
+  # and changing the column names to 'ds' and 'y' which are the ones Prophet uses
+  training_set <- filter_historical_records(
+    base_dataset, ticker_symbol, start_date, end_date) %>%
+    select(date, close) %>%
+    setnames(old = c('date', 'close'), new = c('ds', 'y'))
+
+  # Fitting an Prophet model
+  model$model <- prophet(training_set, daily.seasonality = TRUE)
+
+  #' The predicting function
+  #'
+  #' @param from_date The initial date of the date range to predict.
+  #' @param to_date The final date of the date range to predict.
+  #' @return A dataframe containing the dates in the range to predict
+  #'    with their respective predicted closing price.
+  model$predict <- function(from_date, to_date = NULL) {
+    # If final date is null, then using the initial date, i.e predicting for 1 day
+    if (is.null(to_date)) {
+      to_date <- from_date
+    }
+
+    # Getting a dataframe containing the trading days to make predictions for,
+    # and changing the column name to 'ds' which is the one Prophet uses
+    trading_days <- get_trading_days_in_range(from_date, to_date) %>%
+      setnames(old = c('date'), new = c('ds'))
+    # Getting the predicted stock closing values
+    preds <- predict(model$model, trading_days)
+    # Creating the dataframe with the predicted values per trading day
+    data.frame(date = trading_days$ds, close = preds$yhat)
+  }
+
+  model
+}
+```
+
+In the following code a Prophet model is created and fitted using the defined training set for evaluation purposes, then it makes the predictions for the data range given for the test set.
+
+```{r prophet_train_predict, eval=eval_prophet_model}
+prophet_forecaster <- ProphetStockForecaster(eval_sets$training, eval_ticker_symbol)
+prophet_predictions <- prophet_forecaster$predict(eval_test_start, eval_test_end)
+```
+
+The visualization of the prediction performance for Prophet can be seen in figure \ref{fig:ProphetEvalPlot}. The results of the evaluation are presented in the table \ref{tab:ProphetEval}.
+
+``````{r prophet_eval_plot, echo=FALSE, fig.cap="\\label{fig:ProphetEvalPlot} Prediction with Prophet", fig.height=6, fig.width=10}
+plot_predictions(eval_sets, prophet_predictions,
+                 prophet_forecaster$predict(eval_training_start, eval_training_end))
+```
+
+```{r prophet_eval_result, results = 'asis', echo=FALSE}
+knitr::kable(get_evaluation_results('Prophet', prophet_predictions),
+             caption = '\\label{tab:ProphetEval} Evaluation of prediction with Prophet')
 ```
 
 ### Long Short-Term Memory
 
-[@lstm]
+Long Short-Term Memory (LSTM) is a deep learning method (i.e. that uses neural networks) used to forecast time series. 
+
+A Recurrent Neural Network (RNN) can be thought of as multiple copies of the same network, each passing a message to a successor, aiming for them to learn from the past [@undestanding_lstm]. RNNs are good in handling sequential data but they have two main problems, the first one called "Vanishing/Exploding Gradient problem" presented as a result of the weights being repeated several times, and the second one called "Long-Term Dependencies problem" that happens when the context is far away [@lstm_scratch].
+
+Long Short-Term Memory networks are a special kind of RNNs (introduced by Hochreiter & Schmidhuber in 1997 [@lstm]) with capability of handling Long-Term dependencies and also provide a solution to the Vanishing/Exploding Gradient problem [@lstm_scratch]. They are currently used to address difficult sequence problems in machine learning and achieve state-of-the-art results [@lstm_python_keras].
+
+[@r_interface_keras] [@sunspots_lstm_r]
 
 # Results
 
@@ -1048,5 +1140,6 @@ rm(eval_define_dataset_retrieval,
    eval_linear_regression_model,
    eval_gam_model,
    eval_svm_model,
-   eval_arima_model)
+   eval_arima_model,
+   eval_prophet_model)
 ```
