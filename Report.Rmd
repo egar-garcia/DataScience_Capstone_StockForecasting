@@ -54,6 +54,11 @@ eval_svm_model <-
   !exists('SupportVectorMachineStockForecaster') |
   !exists('svm_forecaster') |
   !exists('svm_predictions')
+
+eval_arima_model <-
+  !exists('ArimaStockForecaster') |
+  !exists('arima_forecaster') |
+  !exists('arima_predictions')
 ```
 
 
@@ -655,11 +660,11 @@ get_evaluation_results <- function(method, predictions) {
 
 Linear Regression is the first and most naive machine learning method to implement, the idea is just to obtain the regression line for the closing prices against the dates. Linear Regression is is a very popular method used in several domains, in spite of its simplicity it can be be very useful as a reference to benchmark the performance of the other method.
 
-For this project's problem, Linear Regression follows the model:
+For this project's purposes, Linear Regression follows the model:
 $$
 \hat{c} = \alpha d + \beta
 $$
-where $\hat{c}$ is the predicted closing price of a stock for a specific trading day's date $d$ (actually a numerical representation of the date). $\alpha$ and $\beta$ are the linear coefficients (slope and intercept).
+Where $\hat{c}$ is the predicted closing price of a stock for a specific trading day's date $d$ (actually a numerical representation of the date). $\alpha$ and $\beta$ are the linear coefficients (slope and intercept).
 
 The following code is the implementation of the model based on Linear Regression.
 
@@ -712,12 +717,14 @@ LinearRegressionStockForecaster <- function(
 }
 ```
 
-In the following code a Linear Regression model is created and fitted/trained using the defined training set for evaluation purposes, then it makes the predictions for the data range given for the test set. The visualization of the prediction performance can be seen in figure \ref{fig:LinearRegressionEvalPlot} and the results of the evaluation are presented in the table \ref{tab:LinearRegressionEval}.
+In the following code a Linear Regression model is created and fitted/trained using the defined training set for evaluation purposes, then it makes the predictions for the data range given for the test set.
 
 ```{r linear_regression_train_predict, eval=eval_linear_regression_model}
 lr_forecaster <- LinearRegressionStockForecaster(eval_sets$training, eval_ticker_symbol)
 lr_predictions <- lr_forecaster$predict(eval_test_start, eval_test_end)
 ```
+
+The visualization of the prediction performance of Linear Regression can be seen in figure \ref{fig:LinearRegressionEvalPlot}, the results of the evaluation are presented in the table \ref{tab:LinearRegressionEval}.
 
 ``````{r linear_regression_eval_plot, echo=FALSE, fig.cap="\\label{fig:LinearRegressionEvalPlot} Prediction with Linear Regression", fig.height=6, fig.width=10}
 plot_predictions(eval_sets, lr_predictions,
@@ -733,11 +740,12 @@ knitr::kable(get_evaluation_results('Linear Regression', lr_predictions),
 
 Generalized Additive Models (GAMs) are a way to model non-linear responses with in the framework of a linear logistic model or other generalized linear model, i.e. GAM relaxes the linearity constraint by finding a set of smooth curve functions applied to the predictors and a constant term $a$, such that the model is represented by the sum of them [@practical_data_science_with_r].
 
-For this project's problem, a GAM model looks like:
+\pagebreak
+For the purpose of this project, a GAM model looks like:
 $$
 \hat{c} = a + f(d)
 $$
-where $\hat{c}$ is the predicted closing price of a stock for a specific trading day's date $d$ (actually a numerical representation of the date), $a$ is a numeric constant and $f$ is a spline (i.e. a smooth curve function build up from polynomials).
+Where $\hat{c}$ is the predicted closing price of a stock for a specific trading day's date $d$ (actually a numerical representation of the date), $a$ is a numeric constant and $f$ is a spline (i.e. a smooth curve function build up from polynomials).
 
 The following code is the implementation of the model based on GAM, the package `caret` is being used to perform the tuning of the parameters.
 
@@ -796,13 +804,15 @@ GeneralizedAdditiveModelStockForecaster <- function(
 }
 ```
 
-In the following code a Generalized Additive Model is created and fitted/trained using the defined training set for evaluation purposes, then it makes the predictions for the data range given for the test set. The visualization of the prediction performance can be seen in figure \ref{fig:GAMEvalPlot} and the results of the evaluation are presented in the table \ref{tab:GAMEval}.
+In the following code a Generalized Additive Model is created and fitted/trained using the defined training set for evaluation purposes, then it makes the predictions for the data range given for the test set.
 
 ```{r gam_train_predict, eval=eval_gam_model}
 gam_forecaster <- GeneralizedAdditiveModelStockForecaster(
   eval_sets$training, eval_ticker_symbol)
 gam_predictions <- gam_forecaster$predict(eval_test_start, eval_test_end)
 ```
+
+The visualization of the prediction performance for GAM can be seen in figure \ref{fig:GAMEvalPlot} and the results of the evaluation are presented in the table \ref{tab:GAMEval}.
 
 ``````{r gam_eval_plot, echo=FALSE, fig.cap="\\label{fig:GAMEvalPlot} Prediction with Generalized Additive Model", fig.height=6, fig.width=10}
 plot_predictions(eval_sets, gam_predictions,
@@ -817,7 +827,20 @@ knitr::kable(get_evaluation_results('GAM', gam_predictions),
 
 ### Support-Vector Machine
 
-[@support-vector-networks]
+Support vector machines (SVMs) are a set of supervised learning methods used for classification, regression and outliers detection, they are among the best "out of the box" supervised learning techniques. The idea behind SVMs is to use entire training examples as classification (or regression landmarks) called support vectors [@practical_data_science_with_r]. The strategy of these techniques is to perform a data separation (or regression) by a hyper-plane when taking the data points to a higer dimension.
+
+For this project's problem, a SVM model looks like:
+$$
+\hat{c} = \sum_{i=1}^m a_i k(d_i, d) + b
+$$
+Where $\hat{c}$ is the predicted closing price of a stock for a specific trading day's date $d$ (actually a numerical representation of the date), $k$ is a kernel function (i.e. $k(u, v) = \phi(u) \cdot \phi(v)$ for a given function $\phi$), $a_1$, ..., $a_m$ are numeric scalars, $b$ is a numeric scalar, and $d_1$, ..., $d_m$ are the support vectors (which in this case are other dates).
+
+A radial based kernel (used for this project's implementation) is given by the formula:
+$$
+k(u,v) = e^{(-\frac{ { \lvert\lvert u - v \rvert\rvert }^2 } {2 \sigma^2})}
+$$
+
+The following code is the implementation of the model based on SVM with a radial based kernel, the package `caret` is being used to perform the tuning of the parameters.
 
 ```{r svm_model, eval=eval_svm_model}
 #' This function represents a constructor 
@@ -873,13 +896,15 @@ SupportVectorMachineStockForecaster <- function(
 }
 ```
 
-In the following code a Support-Vector Machine model is created and fitted/trained using the defined training set for evaluation purposes, then it makes the predictions for the data range given for the test set. The visualization of the prediction performance can be seen in figure \ref{fig:SVMEvalPlot} and the results of the evaluation are presented in the table \ref{tab:SVMEval}.
+In the following code a Support-Vector Machine model is created and fitted/trained using the defined training set for evaluation purposes, then it makes the predictions for the data range given for the test set.
 
 ```{r svm_train_predict, eval=eval_svm_model}
 svm_forecaster <- SupportVectorMachineStockForecaster(
   eval_sets$training, eval_ticker_symbol)
 svm_predictions <- svm_forecaster$predict(eval_test_start, eval_test_end)
 ```
+
+The visualization of the prediction performance for SVM can be seen in figure \ref{fig:SVMEvalPlot} and the results of the evaluation are presented in the table \ref{tab:SVMEval}.
 
 ``````{r svm_eval_plot, echo=FALSE, fig.cap="\\label{fig:SVMEvalPlot} Prediction with Support-Vector Machine", fig.height=6, fig.width=10}
 plot_predictions(eval_sets, svm_predictions,
@@ -894,7 +919,112 @@ knitr::kable(get_evaluation_results('SVM', svm_predictions),
 
 ## Time series based methods {#time_series}
 
-### Moving average
+### ARIMA
+
+AutoRegressive Integrated Moving Average (ARIMA) It is a very popular statistical method for time series analysis and forecasting, its acronym is descriptive, capturing the key aspects of the model itself [@arima_python]:
+
+* AR (Autoregression): A model that uses the dependent relationship between an observation and some number of lagged observations.
+* I (Integrated). The use of differencing of raw observations (e.g. subtracting an observation from an observation at the previous time step) in order to make the time series stationary.
+* MA (Moving Average): A model that uses the dependency between an observation and a residual error from a moving average model applied to lagged observations.
+
+The mathematical equations to describe ARIMA models are fairly complex and beyond the scope of this report, furter details can be found on [@notation_arima_models]. In summary ARIMA has there are three important parameters to tune [@stock_prices_prediction]:
+
+* $p$: Past values used for forecasting the next value.
+* $q$: Past forecast errors used to predict the future values.
+* $d$: Order of differencing.
+
+Parameter tuning for ARIMA consumes a lot of time, fortunately the module "Auto ARIMA" (used for this project) is available and has the advantage of automatically selecting the best combination of the values of (p, q, d) that provides the least error, this selection is done during the fitting process.
+
+The following code is the implementation of the model based on ARIMA using `auto.arima` to automatically tune the parameters.
+
+```{r arima_model, eval=eval_arima_model}
+#' This function represents a constructor 
+#' for a stock forecaster model based on ARIMA.
+#'
+#' @param base_dataset The dataframe used to extract the training set
+#'    in accordance with the date range. 
+#' @param ticker_symbol The ticker symbol to perform predictions for.
+#' @param training_start The minimum date for the records used in the training set.
+#' @param training_end The maximum date for the records used in the training set.
+#' @return The model based on ARIMA.
+ArimaStockForecaster <- function(
+  base_dataset, ticker_symbol, training_start = NULL, training_end = NULL) {
+
+  model <- list()
+
+  # Extracting the training set from the base dataset,
+  # i.e. filtering by ticker symbol and date range
+  training_set <- filter_historical_records(
+    base_dataset, ticker_symbol, training_start, training_end) %>%
+    select(date, close)
+
+  # Keeping track of the training end date
+  model$training_end <- max(training_set$date)
+
+  # Fitting an ARIMA model
+  # (using auto.arima which automatically tunes the parameters)
+  # to predict it takes a time series containing the stock closing prices
+  model$model <- auto.arima(
+    training_set %>% column_to_rownames(var = 'date') %>% .$close,
+    start.p = 0, start.q = 0, max.p = 5, max.q = 5,
+    start.P = 0, start.Q = 0, max.P = 5, max.Q = 5, 
+    d = 1, D = 1,
+    seasonal = TRUE, 
+    trace = FALSE)
+
+  #' The predicting function
+  #'
+  #' @param from_date The initial date of the date range to predict.
+  #' @param to_date The final date of the date range to predict.
+  #' @return A dataframe containing the dates in the range to predict
+  #'    with their respective predicted closing price.
+  model$predict <- function(from_date, to_date = NULL) {
+    # If final date is null, then using the initial date, i.e predicting for 1 day
+    if (is.null(to_date)) {
+      to_date <- from_date
+    }
+    # Checking that date range is valid
+    if (from_date > to_date) {
+      stop('Invalid date range')
+    }
+    # Checking that prediction range is after training
+    if (from_date <= model$training_end) {
+      stop('Prediction range should be after training')
+    }
+
+    # Getting a dataframe containing the trading days to make predictions for,
+    # including the days that might be missing after the end of training
+    # and the begining of the predicting range
+    trading_days <- get_trading_days_in_range(model$training_end + ddays(1), to_date)
+    # Getting the predicted stock closing values
+    preds <- forecast(model$model, nrow(trading_days))
+    # Creating the dataframe with the predicted values per trading day
+    # and filtering to include just the trading days in the given range
+    data.frame(date = trading_days, close = preds$mean) %>%
+      filter(date >= from_date)
+  }
+
+  model
+}
+```
+
+In the following code an ARIMA model is created and fitted using the defined training set for evaluation purposes, then it makes the predictions for the data range given for the test set.
+
+```{r arima_train_predict, eval=eval_svm_model}
+arima_forecaster <- ArimaStockForecaster(eval_sets$training, eval_ticker_symbol)
+arima_predictions <- arima_forecaster$predict(eval_test_start, eval_test_end)
+```
+
+The visualization of the prediction performance for ARIMA can be seen in figure \ref{fig:ARIMAEvalPlot}, note that the prediction on the training set does not appear since the model do not support predictions on a date range, it predicts for a number of time steps (days in this case) ahead. The results of the evaluation are presented in the table \ref{tab:ARIMAEval}.
+
+``````{r arima_eval_plot, echo=FALSE, fig.cap="\\label{fig:ARIMAEvalPlot} Prediction with ARIMA", fig.height=6, fig.width=10}
+plot_predictions(eval_sets, arima_predictions)
+```
+
+```{r arima_eval_result, results = 'asis', echo=FALSE}
+knitr::kable(get_evaluation_results('ARIMA', lr_predictions),
+             caption = '\\label{tab:ARIMAEval} Evaluation of prediction with ARIMA')
+```
 
 ### Long Short-Term Memory
 
@@ -917,5 +1047,6 @@ rm(eval_define_dataset_retrieval,
    eval_generate_training_test_sets,
    eval_linear_regression_model,
    eval_gam_model,
-   eval_svm_model)
+   eval_svm_model,
+   eval_arima_model)
 ```

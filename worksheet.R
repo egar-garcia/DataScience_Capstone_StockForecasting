@@ -534,6 +534,8 @@ results %>% spread('Number of trading days ahead', 'RMSE')
 
 # --------------------
 
+
+
 lr_forecaster <- LinearRegressionStockForecaster(eval_sets$training, eval_ticker_symbol)
 lr_predictions <- lr_forecaster$predict(eval_test_start, eval_test_end)
 
@@ -552,5 +554,76 @@ plot_predictions(eval_sets, gam_predictions,
 get_evaluation_results('GAM', gam_predictions)
 
 
+# ---------
+#' This function represents a constructor 
+#' for a stock forecaster model based on Moving Average.
+#'
+#' @param base_dataset The dataframe used to extract the training set
+#'    in accordance with the date range. 
+#' @param ticker_symbol The ticker symbol to perform predictions for.
+#' @param training_start The minimum date for the records used in the training set.
+#' @param training_end The maximum date for the records used in the training set.
+#' @param order The order for the moving average.
+#' @return The model based on Moving Average.
+MovingAverageStockForecaster <- function(
+  base_dataset, ticker_symbol, training_start = NULL, training_end = NULL,
+  order = 120) {
+  
+  model <- list()
+  
+  # Extracting the training set from the base dataset,
+  # i.e. filtering by ticker symbol and date range
+  training_set <- filter_historical_records(
+    base_dataset, ticker_symbol, training_start, training_end) %>%
+    select(date, close)
+  
+  # Keeping track of the training end date
+  model$training_end <- max(training_set$date)
+  
+  # Fitting a Moving Average model
+  model$model <- ma(training_set$close, order = order, centre = TRUE)
+  
+  #' The predicting function
+  #'
+  #' @param from_date The initial date of the date range to predict.
+  #' @param to_date The final date of the date range to predict.
+  #' @return A dataframe containing the dates in the range to predict
+  #'    with their respective predicted closing price.
+  model$predict <- function(from_date, to_date = NULL) {
+    # If final date is null, then using the initial date, i.e predicting for 1 day
+    if (is.null(to_date)) {
+      to_date <- from_date
+    }
+    # Checking that date range is valid
+    if (from_date > to_date) {
+      stop('Invalid date range')
+    }
+    # Checking that prediction range is after training
+    if (from_date <= model$training_end) {
+      stop('Prediction range should be after training')
+    }
+    
+    # Getting a dataframe containing the trading days to make predictions for,
+    # including the days that might be missing after the end of training
+    # and the begining of the predicting range
+    trading_days <- get_trading_days_in_range(model$training_end + ddays(1), to_date)
+    # Getting the predicted stock closing values
+    preds <- forecast(model$model, nrow(trading_days))
+    # Creating the dataframe with the predicted values per trading day
+    # and filtering to include just the trading days in the given range
+    data.frame(date = trading_days, close = preds$mean) %>%
+      filter(date >= from_date)
+  }
+  
+  model
+}
 
+## ---------
+arima_forecaster <- ArimaStockForecaster(eval_sets$training, eval_ticker_symbol)
+arima_predictions <- arima_forecaster$predict(eval_test_start, eval_test_end)
+
+plot_predictions(eval_sets, arima_predictions,
+                 data.frame(close = as.numeric(arima_forecaster$model$residuals) +
+                              eval_sets$training$close,
+                            date = eval_sets$training$date))
 
