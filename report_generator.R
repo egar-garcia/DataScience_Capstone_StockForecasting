@@ -9,4 +9,3 @@ render('Report.Rmd',
                     #citation_package = 'biblatex', 
                     pandoc_args = c('--bibliography', 'bibliography.bib',
                                     '--csl', 'ieee-with-url.csl')))
-

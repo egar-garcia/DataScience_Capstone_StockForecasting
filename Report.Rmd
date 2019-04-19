@@ -64,6 +64,9 @@ eval_prophet_model <-
   !exists('ProphetStockForecaster') |
   !exists('prophet_forecaster') |
   !exists('prophet_predictions')
+
+eval_lstm_model <-
+  !exists('LongShortTermMemoryStockForecaster')
 ```
 
 
@@ -1120,7 +1123,191 @@ A Recurrent Neural Network (RNN) can be thought of as multiple copies of the sam
 
 Long Short-Term Memory networks are a special kind of RNNs (introduced by Hochreiter & Schmidhuber in 1997 [@lstm]) with capability of handling Long-Term dependencies and also provide a solution to the Vanishing/Exploding Gradient problem [@lstm_scratch]. They are currently used to address difficult sequence problems in machine learning and achieve state-of-the-art results [@lstm_python_keras].
 
-[@r_interface_keras] [@sunspots_lstm_r]
+In order to create the LSTM neural network for this model, Keras is being used. Keras is a high-level neural networks API capable of running on top of multiple back-ends like TensorFlow, CNTK or Theano. It was developed with a focus on enabling fast experimentation, being able to go from idea to result with the least possible delay is key to doing good research [@r_interface_keras]. Even though Keras is written in Python, the package `keras` provides an interface for using it with R.
+
+The implementation of this model is significantly more complex than the previous ones, because it had to be constructed from the scratch, since there is no library that already have it available.
+
+LSTM takes as predictors sequences of a given length (known as time-steps) containing consecutive values in a time series and the outcome is the next value in the time sequence, i.e. the predictor is a subsequence of the time series instead of a single value. To prepare the training set only the values in the column close are needed, the date is not necessary since the important factor is the order. The preprocessing for this method consists in creating the subsequences with the closing prices previous to the date of the respective outcome. Also as in most deep-learning approaches it's recommended that the values (to predict in this case) are normalized, then for this project the closing prices are scaled to the range from 0 to 1.
+
+The preprocessing mechanism for the prediction set complex as well, because LSTM takes as predictors sequences of a given length containing consecutive values in a time series, then the predicted value would be the next value in the time sequence. The preparation of the prediction set consist in creating subsequences containing the closing prices previous to the date to predict, normalized to a range from 0 to 1, since these are the inputs that the LSTM network accept.
+
+```{r lstm_model, eval=eval_lstm_model}
+#' This function represents a constructor 
+#' for a stock forecaster model based on Long Short-Term Memory.
+#'
+#' @param base_dataset The dataframe used to extract the training set
+#'    in accordance with the date range. 
+#' @param ticker_symbol The ticker symbol to perform predictions for.
+#' @param training_start The minimum date for the records used in the training set.
+#' @param training_end The maximum date for the records used in the training set.
+#' @return The model based on Long Short-Term Memory
+LongShortTermMemoryStockForecaster <- function(
+  base_dataset, ticker_symbol, start_date = NULL, end_date = NULL) {
+
+  model <- list()
+
+  # The ticker symbol used to fit the model
+  model$ticker_symbol <- ticker_symbol
+
+  # Size of the time sub-series used to feed the LSTM network
+  model$timesteps <- 60
+  # Number of epochs used to train the LSTM network
+  model$epochs <- 2
+
+  # Extracting the training set from the base dataset)
+  # i.e. filtering by ticker symbol and date range.
+  model$training_set <- filter_historical_records(
+    base_dataset, model$ticker_symbol, start_date, end_date) %>%
+    select(date, close)
+
+  # Keeping track of the training end date
+  model$training_end <- max(model$training_set$date)
+
+  # Scale factor used to normalize the timeseries used as input for the 
+  # LSTM network to contain values in the range [0, 1]
+  model$scale_factor <- max(model$training_set$close) * 2.0
+
+  # Constructing the inputs used to traing the LSTM network
+  # The predictor is a collection of time sub-series of size 'timesteps'
+  train_X <- t(sapply((model$timesteps + 1): nrow(model$training_set),
+                      function(i) {
+                        model$training_set$close[(i - model$timesteps) : (i - 1)]
+                      }))
+  train_X <- train_X / model$scale_factor
+  dim(train_X) <- c(dim(train_X)[1], dim(train_X)[2], 1)
+  # The outcome are the closing prices normalized/scaled to the range [0, 1]
+  train_Y <- model$training_set$close[(model$timesteps + 1) : nrow(model$training_set)]
+  train_Y <- train_Y / model$scale_factor
+
+  # Constructing the LSTM neural network, with an architecture of two LSTM layers
+  model$model <- keras_model_sequential() %>%
+    layer_lstm(units = 50, return_sequences = TRUE,
+               input_shape = c(model$timesteps, 1)) %>%
+    layer_lstm(units = 50) %>%
+    layer_dense(1) %>%
+    compile(loss = 'mean_squared_error', optimizer = 'adam')
+
+  # Training the LSTM network
+  model$training_history <- model$model %>%
+    fit(x = train_X, y = train_Y, epochs = model$epochs, batch_size = 1, verbose = 2)
+
+  #' The predicting function
+  #'
+  #' @param from_date The initial date of the date range to predict.
+  #' @param to_date The final date of the date range to predict.
+  #' @param base_dataset The data set used to support the prediction process.
+  #' @return A dataframe containing the dates in the range to predict
+  #'    with their respective predicted closing price.
+  model$predict <- function(from_date, to_date = NULL, base_dataset = NULL)  {
+    # If final date is null, then using the initial date, i.e predicting for 1 day
+    if (is.null(to_date)) {
+      to_date <- from_date
+    }
+    # Checking that date range is valid
+    if (from_date > to_date) {
+      stop('Invalid date range')
+    }
+    
+    # If not base dataset to support predictions is provided,
+    # then using the training set
+    if (is.null(base_dataset)) {
+      base_dataset <- model$training_set
+    } else {
+      base_dataset <- filter(base_dataset, symbol == model$ticker_symbol)
+    }
+    
+    # Only the historical records on or before the end prediction date are needed
+    base_dataset <- filter(base_dataset, date <= to_date)
+    
+    # Reducing the base dataset just to contain the historical records
+    # necessary to perform the prediction
+    idx <- which(base_dataset$date >= from_date)
+    if (length(idx) > 0) {
+      # If there are records that already exist in the given date range ...
+      idx <- min(idx)
+      
+      if (idx <= model$timesteps) {
+        stop('Not enough records to perform predictions')
+      }
+      
+      # ... keeping the previous 'timesteps' records before the begining of 
+      # of the prediction date range
+      base_dataset <- base_dataset[(idx - model$timesteps) : nrow(base_dataset),]
+    } else {
+      # If there are not records already existing in the given date range,
+      # just taking the last 'timesteps' records
+      base_dataset <- tail(base_dataset, n = model$timesteps)
+      
+      if (nrow(base_dataset) < model$timesteps) {
+        stop('Not enough records to perform predictions')
+      }
+    }
+    
+    # Getting the missing days (for which there are not historical records) 
+    # needed to fulfill the predictions in the given range 
+    missing_start <- max(base_dataset$date) + ddays(1)
+    if (missing_start <= to_date) {
+      missing_days <- get_trading_days_in_range(missing_start, to_date)
+    } else {
+      missing_days <- NULL
+    }
+    
+    # Normalizing the time series used to perform the predictions 
+    # to be in the range [0, 1]
+    inputs <- base_dataset$close / model$scale_factor
+    
+    trading_days <- c() # The trading days in the date range to predict
+    preds <- c() # The predicted closing prices in the date range
+    
+    count <- 1
+    
+    # First using the historical records that already exist to 
+    # suuport the prediction in the given date range
+    i <- model$timesteps + 1
+    while (i <= nrow(base_dataset)) {
+      trading_days[count] <- base_dataset[i, 'date']
+      
+      # Feeding the LSTM network with the previous subseries of size 'timesteps'
+      x <- inputs[(i - model$timesteps) : (i - 1)]
+      dim(x) <- c(1, model$timesteps, 1)
+      y <- predict(model$model, x)
+      
+      # Scaling back the output to be the prediction
+      preds[count] <- y * model$scale_factor
+      
+      i <- i + 1
+      count <- count + 1
+    }
+    
+    # Secondly, fulfiling the missing days by completing the timeseries
+    # with the prediction for the previous day
+    j <- 1
+    while (!is.null(missing_days) && j <= nrow(missing_days)) {
+      trading_days[count] <- missing_days[j, 'date']
+      
+      # Feeding the LSTM network with the previous subseries of size 'timesteps'
+      x <- inputs[(length(inputs) - model$timesteps + 1) : length(inputs)]
+      dim(x) <- c(1, model$timesteps, 1)
+      y <- predict(model$model, x)
+      
+      # Completing the timeseries with the predicted value for the current day
+      inputs[length(inputs) + 1] <- y
+      
+      # Scaling back the output to be the prediction
+      preds[count] <- y * model$scale_factor
+      
+      j <- j + 1
+      count <- count + 1
+    }
+    
+    # Returning the results just for the given prediction data range
+    data.frame(date = as_date(trading_days), close = preds) %>%
+      filter(date >= from_date)
+  }
+
+  model
+}
+```
 
 # Results
 
@@ -1141,5 +1328,6 @@ rm(eval_define_dataset_retrieval,
    eval_gam_model,
    eval_svm_model,
    eval_arima_model,
-   eval_prophet_model)
+   eval_prophet_model,
+   eval_lstm_model)
 ```
