@@ -1,7 +1,8 @@
 ---
 title: "Stock Price Prediction Project"
+subtitle: \small https://github.com/egar-garcia/DataScience_Capstone_StockForecasting
 author: "Egar Garcia"
-date: "4/17/2019"
+date: "`r format(Sys.time(), '%B %d %Y')`"
 output:
   pdf_document:
     toc: true
@@ -127,9 +128,43 @@ Each one of the historical records corresponds to the information of a trading d
 
 1. Building the mechanisms to retrieve the dataset into the local machine's storage, and to keep it updated.
 2. Performing an analysis and exploration of the dataset, aiming to select only the features that are relevant to perform predictions.
-3. Building models that represent the machine learning methods used in this project to address the problem.
-4. Evaluation of the different models with common training and test sets, and doing the comparison based on the RMSE against the ground truth.
-5. Analyzing the predicting performance of each one of the models, and discussing the results.
+3. Building models that represent the machine learning methods used in this project to address the problem:
+    * Linear Regression
+    * Generalized Additive Model
+    * Support-Vector Machine
+    * ARIMA
+    * Prophet
+    * Long Short-Term Memory
+4. Evaluation of the selected models with common training and test sets, doing the evaluation based on the RMSE against the ground truth.
+5. Analyzing the predicting performance of the models, and discussing the results.
+
+## Requirements
+
+For the purposes of this project the data processing, visualizations, models' implementation and evaluations are performed in R, the following is the list of libraries/packages required to develop this project.
+
+```{r libraries, eval=FALSE}
+library(tidyr)
+library(tidyverse)
+library(dplyr)
+library(data.table)
+library(lubridate)
+library(ggplot2)
+library(ggcorrplot)
+library(gridExtra)
+library(directlabels)
+library(httr)
+library(jsonlite)
+library(kernlab)
+library(mgcv)
+library(caret)
+library(nlme)
+library(forecast)
+library(prophet)
+library(keras)
+
+# Install Keras if it has not been installed before
+install_keras()
+```
 
 
 # Data analysis
@@ -343,7 +378,7 @@ load(file = dow_jones_dataframe_filename)
 
 ## Data visualization
 
-The following code generates a visualization in figure \ref{fig:DowJonesHistoric} of the historical closing prices for the 30 stocks of the companies in the Dow Jones, displaying the five years' period up to April 12th, 2019. It displays the prices along the time for all the Dow Jones companies, in addition includes a listing of their respective ticker symbols and names.
+The following code generates a visualization in figure \ref{fig:DowJonesHistoric} of the historical closing prices for the 30 stocks of the companies in the Dow Jones, displaying the five years' period up to April 12 2019. It displays the prices along the time for all the Dow Jones companies, in addition includes a listing of their respective ticker symbols and names.
 
 ```{r historical_records_dow_jones_stocks, echo=TRUE, fig.cap="\\label{fig:DowJonesHistoric} Dow Jones 5 year historic prices", fig.height=9, fig.width=10}
 dow_jones_historical_records %>%
@@ -759,7 +794,6 @@ knitr::kable(get_evaluation_results('Linear Regression', lr_predictions),
 
 Generalized Additive Models (GAMs) are a way to model non-linear responses with in the framework of a linear logistic model or other generalized linear model, i.e. GAM relaxes the linearity constraint by finding a set of smooth curve functions applied to the predictors and a constant term $a$, such that the model is represented by the sum of them [@practical_data_science_with_r].
 
-\pagebreak
 For the purpose of this project, a GAM model looks like:
 $$
 \hat{c} = a + f(d)
@@ -849,7 +883,7 @@ knitr::kable(get_evaluation_results('GAM', gam_predictions),
 
 ### Support-Vector Machine
 
-Support vector machines (SVMs) are a set of supervised learning methods used for classification, regression and outliers detection, they are among the best "out of the box" supervised learning techniques. The idea behind SVMs is to use entire training examples as classification (or regression landmarks) called support vectors [@practical_data_science_with_r]. The strategy of these techniques is to perform a data separation (or regression) by a hyper-plane when taking the data points to a higer dimension.
+Support vector machines (SVMs) are a set of supervised learning methods used for classification, regression and outliers detection, they are among the best "out of the box" supervised learning techniques. The idea behind SVMs is to use entire training examples as classification (or regression landmarks) called support vectors [@practical_data_science_with_r]. The strategy of these techniques is to perform a data separation (or regression) by a hyper-plane when taking the data points to a higher dimension.
 
 For this project's problem, a SVM model looks like:
 $$
@@ -952,7 +986,7 @@ AutoRegressive Integrated Moving Average (ARIMA) It is a very popular statistica
 * I (Integrated). The use of differencing of raw observations (e.g. subtracting an observation from an observation at the previous time step) in order to make the time series stationary.
 * MA (Moving Average): A model that uses the dependency between an observation and a residual error from a moving average model applied to lagged observations.
 
-The mathematical equations to describe ARIMA models are fairly complex and beyond the scope of this report, furter details can be found on [@notation_arima_models]. In summary ARIMA has there are three important parameters to tune [@stock_prices_prediction]:
+The mathematical equations to describe ARIMA models are fairly complex and beyond the scope of this report, further details can be found on [@notation_arima_models]. In summary ARIMA has there are three important parameters to tune [@stock_prices_prediction]:
 
 * $p$: Past values used for forecasting the next value.
 * $q$: Past forecast errors used to predict the future values.
@@ -1147,13 +1181,13 @@ For this model is necessary to create an LSTM neural, that can be done through K
 
 The implementation of this model is significantly more complex than the previous ones, because it had to be constructed from the scratch, since there is no library that already have it available.
 
-LSTM takes as predictors sequences of a given length (known as time steps) containing consecutive values in a time series and the outcome is the next value in the time sequence, i.e. the predictor is a subsequence of the time series instead of a single value. To prepare the training set only the values in the column close are needed, the date is not necessary since the important factor is the order. The preprocessing for this method consists in creating the subsequences with the closing prices previous to the date of the respective outcome. In addition, as recomended in most deep-learning approaches the values to predict (i.e. the closing prices) are scaled to the range from 0 to 1.
+LSTM takes as predictors sequences of a given length (known as time steps) containing consecutive values in a time series and the outcome is the next value in the time sequence, i.e. the predictor is a sub-sequence of the time series instead of a single value. To prepare the training set only the values in the column close are needed, the date is not necessary since the important factor is the order. The pre-processing for this method consists in creating the sub-sequences with the closing prices previous to the date of the respective outcome. In addition, as recommended in most deep-learning approaches the values to predict (i.e. the closing prices) are scaled to the range from 0 to 1.
 
-The preprocessing mechanism for the prediction set is complex as well, since it is required to create the subsequences containing the closing prices previous to the date to predict, and normalized to the range $[0, 1]$. That means that in order to do long term predictions the missing values of the subsequence need to be fulfilled with other predicted values.
+The pre-processing mechanism for the prediction set is complex as well, since it is required to create the sub-sequences containing the closing prices previous to the date to predict, and normalized to the range $[0, 1]$. That means that in order to do long term predictions the missing values of the sub-sequence need to be fulfilled with other predicted values.
 
-In contrast with other methods, a trainied LSTM model can take advance of an updated dataset to make further predictions, basically by constructing the subsequence used as predictor with updated data, the advantage is that the LSTM model can be kept in use without the need of training it again. For example and ideal case would be to train the LSTM model, then updating the dataset on daily bases and performing the prediction of the closing price for the next day.
+In contrast with other methods, a trained LSTM model can take advance of an updated dataset to make further predictions, basically by constructing the sub-sequence used as predictor with updated data, the advantage is that the LSTM model can be kept in use without the need of training it again. For example and ideal case would be to train the LSTM model, then updating the dataset on daily bases and performing the prediction of the closing price for the next day.
 
-The following code is the implementation of the LSTM model, an important aspect to notice is that in the prediction the it first tries to fill the subsequences used as predictors with the existing records in the given dataset, if there are missing records the data is fulfilled with predictions for the previous dates.
+The following code is the implementation of the LSTM model, an important aspect to notice is that in the prediction the it first tries to fill the sub-sequences used as predictors with the existing records in the given dataset, if there are missing records the data is fulfilled with predictions for the previous dates.
 
 ```{r lstm_model, eval=eval_lstm_model}
 #' This function represents a constructor 
@@ -1343,7 +1377,7 @@ lstm_forecaster <- LongShortTermMemoryStockForecaster(eval_sets$training, eval_t
 lstm_train_predictions <- lstm_forecaster$predict(eval_sets$training[61,]$date)
 ```
 
-Then in the next code, the predictions are performed for the data range given for the test set, in here is represented the case when the closing prices of the predicting range are completly unknown (p.e. when a long term prediction in the future is attempted).
+Then in the next code, the predictions are performed for the data range given for the test set, in here is represented the case when the closing prices of the predicting range are completely unknown (p.e. when a long term prediction in the future is attempted).
 
 ```{r lstm_predict, eval=eval_lstm_model}
 lstm_predictions <- lstm_forecaster$predict(eval_test_start, eval_test_end)
@@ -1360,7 +1394,7 @@ knitr::kable(get_evaluation_results('LSTM', lstm_predictions),
              caption = '\\label{tab:LSTMEval} Evaluation of prediction with LSTM')
 ```
 
-The previoUs evaluation does not seem very encouraging, however the resuls are completly different when the prediction is performed when the dataset is kept updated, p.e. in the situation where the dataset is daily updated and the predictions performed for the next day. The following code simulates this scenario by providing an updated dataset to support the prediction process.
+The previous evaluation does not seem very encouraging, however the results are completely different when the prediction is performed when the dataset is kept updated, p.e. in the situation where the dataset is daily updated and the predictions performed for the next day. The following code simulates this scenario by providing an updated dataset to support the prediction process.
 
 ```{r lstm_daily_predict, eval=eval_lstm_model}
 lstm_daily_predictions <- lstm_forecaster$predict(eval_test_start, eval_test_end,
@@ -1374,7 +1408,7 @@ plot_predictions(eval_sets, lstm_daily_predictions, lstm_train_predictions)
 ```
 
 ```{r lstm_daily_eval_result, results = 'asis', echo=FALSE}
-knitr::kable(get_evaluation_results('LSTM - daily update/predict', lstm_daily_predictions),
+knitr::kable(get_evaluation_results('LSTM - Updated DS', lstm_daily_predictions),
              caption = '\\label{tab:LSTMDailyEval} Evaluation of prediction with LSTM doing daily update and predict')
 ```
 
@@ -1382,12 +1416,64 @@ knitr::kable(get_evaluation_results('LSTM - daily update/predict', lstm_daily_pr
 
 # Results
 
-The results of the evaluation for all the models tested in this report are gathered in table \ref{tab:Results}.
+To evaluate the machine learning methods used in this project, a historical test dataset for a ticker symbol up to a given date is taken and used to perform the training. Then the prediction is performed and tested over validation sets for the following 1, 5, 10, 20, 40, 60 and 120 trading days, which is almost equal to predict for the next trading day and then 1, 2, 4, 8, 12 and 24 weeks ahead (if disregarding the holidays in between).
+
+In table \ref{tab:Results} are gathered the results of the evaluation for all the models tested in this report, the evaluation is based on the RMSE of their predictions against the test set's ground truth.
 
 ```{r results_table, results = 'asis', echo=FALSE}
 knitr::kable(results %>% spread('Number of trading days ahead', 'RMSE'),
              caption = '\\label{tab:Results} Results of the evaluation')
 ```
+
+Another perspective of the result is provided by benchmarking the performance of the different machine learning methods implemented in this project, they are compared against the initial naive solution which is produced via Linear Regression.
+
+The results of the benchmarking can be expressed in terms of an improvement (or worsening) ratio against the linear regression. The ratio can be calculated with the following formula: 
+$$
+r_m = \dfrac{{RMSE}_{LinearRegression} - {RMSE}_m}{{RMSE}_{LinearRegression}}
+$$
+
+The model improvement ratio can be interpreted as follows:
+
+A value of $1$ means that the model has no error, i.e. it was improved to perfection.
+A value of $0$ means that the model has the same performance than the linear regression, i.e. it was not improvement or worsening.
+A positive value between $0$ and $1$ means that the model performs better than Liner Regression, but still with some errors, the closer to $1$ the smaller the errors in the predictions.
+A negative value means that the performance of the model is worst than Linear Regression.
+
+The following code performs the benchmarking of the results against Linear Regression, and they are presented in table \ref{tab:ResultsBenchLR}.
+
+```{r bechmarking_results, eval=TRUE}
+benchmark_against_linear_regression <- function(results) {
+  filter(results, Method != 'Linear Regression') %>%
+    left_join(results %>%
+                filter(Method == 'Linear Regression') %>%
+                select(-Method) %>%
+                setnames(old = c('RMSE'), new = c('LR_RMSE')),
+              by = 'Number of trading days ahead') %>%
+    mutate('Improvement Ratio' = (LR_RMSE - RMSE) / LR_RMSE) %>%
+    select(-c('RMSE', 'LR_RMSE'))  
+}
+```
+
+```{r results_lr_benchmark_table, results = 'asis', echo=FALSE}
+knitr::kable(benchmark_against_linear_regression(results) %>%
+               spread('Number of trading days ahead', 'Improvement Ratio'),
+  caption = '\\label{tab:ResultsBenchLR} Results of the evaluation benchmarked against Liner Regression')
+```
+
+# Conclusions
+
+The problem of predicting stock prices was actually a lot more difficult than originally was expected, the stock prices have a lot of fluctuations where unexpected political, economical or social events can cause the prices to suddenly drop or rise, as mentioned in [@guide_day_trading_online] the stock market mirrors the state of mind of the people involved, which are driven by human emotions like euphoria or fear.
+
+Additionally, the problem is very different to other machine learning problems since the predictions should take place strictly in the future and not distributed along the domain of predictors/predictions. For this particular kind of problems the way to address them is by using techniques for time series forecasting.
+
+The results obtained when addressing the problem of predicting stock prices in the future just by using the data already known (and used in training) where not very encouraging. The methods/models used in this project ARIMA, Prophet and LSTM can at least give a tendency, which looks to be relevant in short term (up to around 10 weeks ahead), however the results does not seem to be precise enough to predict with certainty a stock closing price for a particular day.
+
+However, not everything is lost, with a variant on the mechanism for doing predictions, they can look way better, this is by using LSTM and periodically updating the dataset (ideally every day) and then doing the prediction for the next day, in this way the predictions for the next day would be more precise. Another advantage of LSTM is that retraining the model is not necessary, it was observed during the evaluation that after training the model this still gives good results for around 24 weeks ahead, it looks like even when the stock prices fluctuates LSTM can quickly adapt/correct the tendencies.
+
+LSTM is not an easy algorithm to understand and then put in practice, there were some complications during its implementation, like implementing the pre-processing mechanism to create the sub-series used as predictors and the mechanism to take advance on the existing updated data to support the prediction process.
+
+Finally, the objective of this project was accomplished by providing a set of constructions and models, which are able to be used in a RStudio or similar environment for doing experiments and analysis of data, targeting it to be used for data scientists and/or (financial) data analysts.
+
 
 # References
 

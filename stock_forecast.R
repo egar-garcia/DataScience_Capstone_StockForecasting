@@ -1,11 +1,13 @@
 #-----------------------------------
-# Required packages and libraries
+# Required packages
 #-----------------------------------
 
+# Installing that required packages that are not jet installed
 if(!require(tidyverse)) install.packages('tidyverse')
 if(!require(httr)) install.packages('httr')
 if(!require(jsonlite)) install.packages('jsonlite')
 if(!require(ggcorrplot)) install.packages('ggcorrplot')
+if(!require(gridExtra)) install.packages('gridExtra')
 if(!require(directlabels)) install.packages('directlabels')
 if(!require(caret)) install.packages('caret')
 if(!require(mgcv)) install.packages('mgcv')
@@ -15,6 +17,8 @@ if(!require(forecast)) install.packages('forecast')
 if(!require(prophet)) install.packages('prophet')
 if(!require(keras)) install.packages('keras')
 
+
+# Loading the required packages
 library(tidyr)
 library(tidyverse)
 library(dplyr)
@@ -22,6 +26,7 @@ library(data.table)
 library(lubridate)
 library(ggplot2)
 library(ggcorrplot)
+library(gridExtra)
 library(directlabels)
 library(httr)
 library(jsonlite)
@@ -33,7 +38,7 @@ library(forecast)
 library(prophet)
 library(keras)
 
-# Install Keras if you have not installed before
+# Install Keras if it has not been installed before
 install_keras()
 
 
@@ -446,7 +451,7 @@ get_evaluation_results <- function(method, predictions) {
 
 
 #-----------------------------------
-# Models
+# Models' implementation
 #-----------------------------------
 
 
@@ -902,6 +907,7 @@ LongShortTermMemoryStockForecaster <- function(
   model
 }
 
+
 #-----------------------------------
 # Evaluation
 #-----------------------------------
@@ -987,6 +993,40 @@ lstm_daily_predictions <- lstm_forecaster$predict(eval_test_start, eval_test_end
 
 plot_predictions(eval_sets, lstm_daily_predictions, lstm_train_predictions)
 
-get_evaluation_results('LSTM - daily update/predict', lstm_predictions)
+get_evaluation_results('LSTM - Updated DS', lstm_predictions)
 
 
+#-----------------------------------
+# Results
+#-----------------------------------
+
+results %>% spread('Number of trading days ahead', 'RMSE')
+
+# This is the function to do the benchmarking of the results
+benchmark_against_linear_regression <- function(results) {
+  filter(results, Method != 'Linear Regression') %>%
+    left_join(results %>%
+                filter(Method == 'Linear Regression') %>%
+                select(-Method) %>%
+                setnames(old = c('RMSE'), new = c('LR_RMSE')),
+              by = 'Number of trading days ahead') %>%
+    mutate('Improvement Ratio' = (LR_RMSE - RMSE) / LR_RMSE) %>%
+    select(-c('RMSE', 'LR_RMSE'))  
+}
+
+# Benchmarking against linear regression
+benchmark_against_linear_regression(results) %>%
+  spread('Number of trading days ahead', 'Improvement Ratio')
+
+
+grid.arrange(
+  plot_predictions(eval_sets, lr_predictions, lr_train_predictions),
+  plot_predictions(eval_sets, gam_predictions, gam_train_predictions),
+  plot_predictions(eval_sets, svm_predictions, svm_train_predictions),
+  plot_predictions(eval_sets, arima_predictions),
+  plot_predictions(eval_sets, prophet_predictions, prophet_train_predictions),
+  plot_predictions(eval_sets, lstm_predictions, lstm_train_predictions),
+  plot_predictions(eval_sets, lstm_daily_predictions, lstm_train_predictions),
+  ncol = 1)
+  
+  
