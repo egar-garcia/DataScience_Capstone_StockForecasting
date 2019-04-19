@@ -43,17 +43,20 @@ eval_generate_training_test_sets <-
 eval_linear_regression_model <-
   !exists('LinearRegressionStockForecaster') |
   !exists('lr_forecaster') |
-  !exists('lr_predictions')
+  !exists('lr_predictions') |
+  !exists('lr_train_predictions')
 
 eval_gam_model <-
   !exists('GeneralizedAdditiveModelStockForecaster') |
   !exists('gam_forecaster') |
-  !exists('gam_predictions')
+  !exists('gam_predictions') |
+  !exists('gam_train_predictions')
 
 eval_svm_model <-
   !exists('SupportVectorMachineStockForecaster') |
   !exists('svm_forecaster') |
-  !exists('svm_predictions')
+  !exists('svm_predictions') |
+  !exists('svm_train_predictions')
 
 eval_arima_model <-
   !exists('ArimaStockForecaster') |
@@ -63,10 +66,15 @@ eval_arima_model <-
 eval_prophet_model <-
   !exists('ProphetStockForecaster') |
   !exists('prophet_forecaster') |
-  !exists('prophet_predictions')
+  !exists('prophet_predictions') |
+  !exists('prophet_train_predictions')
 
 eval_lstm_model <-
-  !exists('LongShortTermMemoryStockForecaster')
+  !exists('LongShortTermMemoryStockForecaster') |
+  !exists('lstm_forecaster') |
+  !exists('lstm_train_predictions') |
+  !exists('lstm_predictions') |
+  !exists('lstm_daily_predictions')
 ```
 
 
@@ -734,9 +742,12 @@ lr_predictions <- lr_forecaster$predict(eval_test_start, eval_test_end)
 
 The visualization of the prediction performance of Linear Regression can be seen in figure \ref{fig:LinearRegressionEvalPlot}, the results of the evaluation are presented in the table \ref{tab:LinearRegressionEval}.
 
+```{r linear_regression_train_prediction, eval=eval_linear_regression_model, echo=FALSE}
+lr_train_predictions <- lr_forecaster$predict(eval_training_start, eval_training_end)
+```
+
 ``````{r linear_regression_eval_plot, echo=FALSE, fig.cap="\\label{fig:LinearRegressionEvalPlot} Prediction with Linear Regression", fig.height=6, fig.width=10}
-plot_predictions(eval_sets, lr_predictions,
-                 lr_forecaster$predict(eval_training_start, eval_training_end))
+plot_predictions(eval_sets, lr_predictions, lr_train_predictions)
 ```
 
 ```{r linear_regression_eval_result, results = 'asis', echo=FALSE}
@@ -822,9 +833,12 @@ gam_predictions <- gam_forecaster$predict(eval_test_start, eval_test_end)
 
 The visualization of the prediction performance for GAM can be seen in figure \ref{fig:GAMEvalPlot} and the results of the evaluation are presented in the table \ref{tab:GAMEval}.
 
+```{r gam_train_prediction, eval=eval_gam_model, echo=FALSE}
+gam_train_predictions <- gam_forecaster$predict(eval_training_start, eval_training_end)
+```
+
 ``````{r gam_eval_plot, echo=FALSE, fig.cap="\\label{fig:GAMEvalPlot} Prediction with Generalized Additive Model", fig.height=6, fig.width=10}
-plot_predictions(eval_sets, gam_predictions,
-                 gam_forecaster$predict(eval_training_start, eval_training_end))
+plot_predictions(eval_sets, gam_predictions, gam_train_predictions)
 ```
 
 ```{r gam_eval_result, results = 'asis', echo=FALSE}
@@ -914,9 +928,12 @@ svm_predictions <- svm_forecaster$predict(eval_test_start, eval_test_end)
 
 The visualization of the prediction performance for SVM can be seen in figure \ref{fig:SVMEvalPlot} and the results of the evaluation are presented in the table \ref{tab:SVMEval}.
 
-``````{r svm_eval_plot, echo=FALSE, fig.cap="\\label{fig:SVMEvalPlot} Prediction with Support-Vector Machine", fig.height=6, fig.width=10}
-plot_predictions(eval_sets, svm_predictions,
-                 svm_forecaster$predict(eval_training_start, eval_training_end))
+```{r svm_train_prediction, eval=eval_svm_model, echo=FALSE}
+svm_train_predictions <- svm_forecaster$predict(eval_training_start, eval_training_end)
+```
+
+```{r svm_eval_plot, echo=FALSE, fig.cap="\\label{fig:SVMEvalPlot} Prediction with Support-Vector Machine", fig.height=6, fig.width=10}
+plot_predictions(eval_sets, svm_predictions, svm_train_predictions)
 ```
 
 ```{r svm_eval_result, results = 'asis', echo=FALSE}
@@ -1105,9 +1122,12 @@ prophet_predictions <- prophet_forecaster$predict(eval_test_start, eval_test_end
 
 The visualization of the prediction performance for Prophet can be seen in figure \ref{fig:ProphetEvalPlot}. The results of the evaluation are presented in the table \ref{tab:ProphetEval}.
 
+```{r prophet_train_prediction, eval=eval_prophet_model, echo=FALSE}
+prophet_train_predictions <- prophet_forecaster$predict(eval_training_start, eval_training_end)
+```
+
 ``````{r prophet_eval_plot, echo=FALSE, fig.cap="\\label{fig:ProphetEvalPlot} Prediction with Prophet", fig.height=6, fig.width=10}
-plot_predictions(eval_sets, prophet_predictions,
-                 prophet_forecaster$predict(eval_training_start, eval_training_end))
+plot_predictions(eval_sets, prophet_predictions, prophet_train_predictions)
 ```
 
 ```{r prophet_eval_result, results = 'asis', echo=FALSE}
@@ -1123,13 +1143,17 @@ A Recurrent Neural Network (RNN) can be thought of as multiple copies of the sam
 
 Long Short-Term Memory networks are a special kind of RNNs (introduced by Hochreiter & Schmidhuber in 1997 [@lstm]) with capability of handling Long-Term dependencies and also provide a solution to the Vanishing/Exploding Gradient problem [@lstm_scratch]. They are currently used to address difficult sequence problems in machine learning and achieve state-of-the-art results [@lstm_python_keras].
 
-In order to create the LSTM neural network for this model, Keras is being used. Keras is a high-level neural networks API capable of running on top of multiple back-ends like TensorFlow, CNTK or Theano. It was developed with a focus on enabling fast experimentation, being able to go from idea to result with the least possible delay is key to doing good research [@r_interface_keras]. Even though Keras is written in Python, the package `keras` provides an interface for using it with R.
+For this model is necessary to create an LSTM neural, that can be done through Keras. Keras is a high-level neural networks API capable of running on top of multiple back-ends like TensorFlow, CNTK or Theano. It was developed with a focus on enabling fast experimentation, being able to go from idea to result with the least possible delay is key to doing good research [@r_interface_keras]. Even though Keras is written in Python, the package `keras` provides an interface for using it with R.
 
 The implementation of this model is significantly more complex than the previous ones, because it had to be constructed from the scratch, since there is no library that already have it available.
 
-LSTM takes as predictors sequences of a given length (known as time-steps) containing consecutive values in a time series and the outcome is the next value in the time sequence, i.e. the predictor is a subsequence of the time series instead of a single value. To prepare the training set only the values in the column close are needed, the date is not necessary since the important factor is the order. The preprocessing for this method consists in creating the subsequences with the closing prices previous to the date of the respective outcome. Also as in most deep-learning approaches it's recommended that the values (to predict in this case) are normalized, then for this project the closing prices are scaled to the range from 0 to 1.
+LSTM takes as predictors sequences of a given length (known as time steps) containing consecutive values in a time series and the outcome is the next value in the time sequence, i.e. the predictor is a subsequence of the time series instead of a single value. To prepare the training set only the values in the column close are needed, the date is not necessary since the important factor is the order. The preprocessing for this method consists in creating the subsequences with the closing prices previous to the date of the respective outcome. In addition, as recomended in most deep-learning approaches the values to predict (i.e. the closing prices) are scaled to the range from 0 to 1.
 
-The preprocessing mechanism for the prediction set complex as well, because LSTM takes as predictors sequences of a given length containing consecutive values in a time series, then the predicted value would be the next value in the time sequence. The preparation of the prediction set consist in creating subsequences containing the closing prices previous to the date to predict, normalized to a range from 0 to 1, since these are the inputs that the LSTM network accept.
+The preprocessing mechanism for the prediction set is complex as well, since it is required to create the subsequences containing the closing prices previous to the date to predict, and normalized to the range $[0, 1]$. That means that in order to do long term predictions the missing values of the subsequence need to be fulfilled with other predicted values.
+
+In contrast with other methods, a trainied LSTM model can take advance of an updated dataset to make further predictions, basically by constructing the subsequence used as predictor with updated data, the advantage is that the LSTM model can be kept in use without the need of training it again. For example and ideal case would be to train the LSTM model, then updating the dataset on daily bases and performing the prediction of the closing price for the next day.
+
+The following code is the implementation of the LSTM model, an important aspect to notice is that in the prediction the it first tries to fill the subsequences used as predictors with the existing records in the given dataset, if there are missing records the data is fulfilled with predictions for the previous dates.
 
 ```{r lstm_model, eval=eval_lstm_model}
 #' This function represents a constructor 
@@ -1308,6 +1332,53 @@ LongShortTermMemoryStockForecaster <- function(
   model
 }
 ```
+
+In the following code an LSTM model is created and trained using the defined training set for evaluation purposes.
+
+```{r lstm_train, eval=eval_lstm_model}
+lstm_forecaster <- LongShortTermMemoryStockForecaster(eval_sets$training, eval_ticker_symbol)
+```
+
+```{r lstm_train_prediction, eval=eval_lstm_model, echo=FALSE}
+lstm_train_predictions <- lstm_forecaster$predict(eval_sets$training[61,]$date)
+```
+
+Then in the next code, the predictions are performed for the data range given for the test set, in here is represented the case when the closing prices of the predicting range are completly unknown (p.e. when a long term prediction in the future is attempted).
+
+```{r lstm_predict, eval=eval_lstm_model}
+lstm_predictions <- lstm_forecaster$predict(eval_test_start, eval_test_end)
+```
+
+In figure \ref{fig:LSTMEvalPlot} it can be seen the visualization of the prediction performance for LSTM when the predicting closing prices are completely unknown. The results of the evaluation are presented in the table \ref{tab:LSTMEval}.
+
+``````{r lstm_eval_plot, echo=FALSE, fig.cap="\\label{fig:LSTMEvalPlot} Prediction with LSTM", fig.height=6, fig.width=10}
+plot_predictions(eval_sets, lstm_predictions, lstm_train_predictions)
+```
+
+```{r lstm_eval_result, results = 'asis', echo=FALSE}
+knitr::kable(get_evaluation_results('LSTM', lstm_predictions),
+             caption = '\\label{tab:LSTMEval} Evaluation of prediction with LSTM')
+```
+
+The previoUs evaluation does not seem very encouraging, however the resuls are completly different when the prediction is performed when the dataset is kept updated, p.e. in the situation where the dataset is daily updated and the predictions performed for the next day. The following code simulates this scenario by providing an updated dataset to support the prediction process.
+
+```{r lstm_daily_predict, eval=eval_lstm_model}
+lstm_daily_predictions <- lstm_forecaster$predict(eval_test_start, eval_test_end,
+                                                  dow_jones_historical_records)
+```
+
+In figure \ref{fig:LSTMDailyEvalPlot} it can be seen the visualization of the prediction performance for LSTM when the dataset is kept updated and the prediction performed for the next day. The results of the evaluation for this approach are presented in the table \ref{tab:LSTMDailyEval}.
+
+``````{r lstm_daily_eval_plot, echo=FALSE, fig.cap="\\label{fig:LSTMDailyEvalPlot} Prediction with LSTM doing daily update and predict", fig.height=6, fig.width=10}
+plot_predictions(eval_sets, lstm_daily_predictions, lstm_train_predictions)
+```
+
+```{r lstm_daily_eval_result, results = 'asis', echo=FALSE}
+knitr::kable(get_evaluation_results('LSTM - daily update/predict', lstm_daily_predictions),
+             caption = '\\label{tab:LSTMDailyEval} Evaluation of prediction with LSTM doing daily update and predict')
+```
+
+
 
 # Results
 

@@ -911,8 +911,9 @@ LongShortTermMemoryStockForecaster <- function(
 lr_forecaster <- LinearRegressionStockForecaster(eval_sets$training, eval_ticker_symbol)
 lr_predictions <- lr_forecaster$predict(eval_test_start, eval_test_end)
 
-plot_predictions(eval_sets, lr_predictions,
-                 lr_forecaster$predict(eval_training_start, eval_training_end))
+lr_train_predictions <- lr_forecaster$predict(eval_training_start, eval_training_end)
+
+plot_predictions(eval_sets, lr_predictions, lr_train_predictions)
 
 get_evaluation_results('Linear Regression', lr_predictions)
 
@@ -923,8 +924,9 @@ gam_forecaster <- GeneralizedAdditiveModelStockForecaster(
   eval_sets$training, eval_ticker_symbol)
 gam_predictions <- gam_forecaster$predict(eval_test_start, eval_test_end)
 
-plot_predictions(eval_sets, gam_predictions,
-                 gam_forecaster$predict(eval_training_start, eval_training_end))
+gam_train_predictions <- gam_forecaster$predict(eval_training_start, eval_training_end)
+
+plot_predictions(eval_sets, gam_predictions, gam_train_predictions)
 
 get_evaluation_results('GAM', gam_predictions)
 
@@ -935,8 +937,9 @@ svm_forecaster <- SupportVectorMachineStockForecaster(
   eval_sets$training, eval_ticker_symbol)
 svm_predictions <- svm_forecaster$predict(eval_test_start, eval_test_end)
 
-plot_predictions(eval_sets, svm_predictions,
-                 svm_forecaster$predict(eval_training_start, eval_training_end))
+svm_train_predictions <- svm_forecaster$predict(eval_training_start, eval_training_end)
+
+plot_predictions(eval_sets, svm_predictions, svm_train_predictions)
 
 get_evaluation_results('SVM', gam_predictions)
 
@@ -956,29 +959,34 @@ get_evaluation_results('ARIMA', arima_predictions)
 prophet_forecaster <- ProphetStockForecaster(eval_sets$training, eval_ticker_symbol)
 prophet_predictions <- prophet_forecaster$predict(eval_test_start, eval_test_end)
 
-plot_predictions(eval_sets, prophet_predictions,
-                 prophet_forecaster$predict(eval_training_start, eval_training_end))
+prophet_train_predictions <- prophet_forecaster$predict(eval_training_start, eval_training_end)
+
+plot_predictions(eval_sets, prophet_predictions, prophet_train_predictions)
 
 get_evaluation_results('Prophet', prophet_predictions)
 
 
-# Evaluation of Prophet
+# Evaluation of LSTM
 
 lstm_forecaster <- LongShortTermMemoryStockForecaster(eval_sets$training, eval_ticker_symbol)
 
+# Prediction on the training set
+lstm_train_predictions <- lstm_forecaster$predict(eval_sets$training[61,]$date, eval_training_end)
+
+# Prediction and evaluation when the prediction range is completely unknown
 lstm_predictions <- lstm_forecaster$predict(eval_test_start, eval_test_end)
 
-plot_predictions(eval_sets, lstm_predictions,
-                 lstm_forecaster$predict(eval_sets$training[61,]$date, eval_training_end))
+plot_predictions(eval_sets, lstm_predictions, lstm_train_predictions)
 
 get_evaluation_results('LSTM', lstm_predictions)
 
+# Prediction and evaluation when the dataset is updated daily and the prediction done
+# for the next day
 lstm_daily_predictions <- lstm_forecaster$predict(eval_test_start, eval_test_end,
-                                                  base_dataset = dow_jones_historical_records)
+                                                  dow_jones_historical_records)
 
-plot_predictions(eval_sets, lstm_daily_predictions,
-                 lstm_forecaster$predict(eval_sets$training[61,]$date, eval_training_end))
+plot_predictions(eval_sets, lstm_daily_predictions, lstm_train_predictions)
 
-get_evaluation_results('LSTM - Daily Updated', lstm_daily_predictions)
+get_evaluation_results('LSTM - daily update/predict', lstm_predictions)
 
 
