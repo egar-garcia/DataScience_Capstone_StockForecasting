@@ -167,13 +167,13 @@ dow_jones_dataframe_filename <- 'dow_jones_dataframe.Rda'
 #--------------------------------
 
 # Creating a new dataset
-#dow_jones_historical_records <- get_dow_jones_dataframe()
-#save(dow_jones_historical_records, file = dow_jones_dataframe_filename)
+dow_jones_historical_records <- get_dow_jones_dataframe()
+save(dow_jones_historical_records, file = dow_jones_dataframe_filename)
 
 # Loading, updating and saving the dataset
-#load(file = dow_jones_dataframe_filename)
-#dow_jones_historical_records <- update_dow_jones_dataframe(dow_jones_historical_records)
-#save(dow_jones_historical_records, file = dow_jones_dataframe_filename)
+load(file = dow_jones_dataframe_filename)
+dow_jones_historical_records <- update_dow_jones_dataframe(dow_jones_historical_records)
+save(dow_jones_historical_records, file = dow_jones_dataframe_filename)
 
 # Loading dataset
 load(file = dow_jones_dataframe_filename)
