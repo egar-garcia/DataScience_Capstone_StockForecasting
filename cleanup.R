@@ -1,4 +1,5 @@
 rm(dow_jones_stocks, djia_symbol, iex_api_url_template,
+   dow_jones_dataframe_filename,
    get_historical_records, get_dow_jones_dataframe,
    update_dow_jones_dataframe, dow_jones_historical_records)
 
@@ -8,6 +9,8 @@ rm(get_train_and_test_sets,
    eval_ticker_symbol, eval_sets,
    eval_training_start, eval_training_end,
    eval_test_start, eval_test_end)
+
+rm(create_results_dataframe, filter_historical_records)
 
 rm(LinearRegressionStockForecaster,
    lr_forecaster, lr_predictions, lr_train_predictions)
@@ -26,3 +29,7 @@ rm(ProphetStockForecaster,
 
 rm(LongShortTermMemoryStockForecaster,
    lstm_forecaster, lstm_train_predictions, lstm_predictions, lstm_daily_predictions)
+
+rm(get_evaluation_results, plot_predictions,
+   benchmark_against_linear_regression,
+   results)

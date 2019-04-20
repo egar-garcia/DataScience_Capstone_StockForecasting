@@ -7,7 +7,7 @@ if(!require(tidyverse)) install.packages('tidyverse')
 if(!require(httr)) install.packages('httr')
 if(!require(jsonlite)) install.packages('jsonlite')
 if(!require(ggcorrplot)) install.packages('ggcorrplot')
-if(!require(gridExtra)) install.packages('gridExtra')
+if(!require(cowplot)) install.packages('cowplot')
 if(!require(directlabels)) install.packages('directlabels')
 if(!require(caret)) install.packages('caret')
 if(!require(mgcv)) install.packages('mgcv')
@@ -26,7 +26,7 @@ library(data.table)
 library(lubridate)
 library(ggplot2)
 library(ggcorrplot)
-library(gridExtra)
+library(cowplot)
 library(directlabels)
 library(httr)
 library(jsonlite)
@@ -396,7 +396,8 @@ ggplot() +
 #' @param sets A list containing the training and test sets.
 #' @param predictions The predictions against the test set.
 #' @param training_predictions The predictions against the training set (optional). 
-plot_predictions <- function(sets, predictions, training_predictions = NULL) {
+plot_predictions <- function(sets, predictions, training_predictions = NULL,
+                             legend_pos = 'top') {
   plot <- ggplot()
   
   if (!is.null(training_predictions)) {
@@ -414,7 +415,7 @@ plot_predictions <- function(sets, predictions, training_predictions = NULL) {
                                   'Test Set' = 'green',
                                   'Test Prediction' = 'red')) +
     labs(color = '') +
-    theme(legend.position = 'top')
+    theme(legend.position = legend_pos)
   
   plot
 }
@@ -1000,6 +1001,30 @@ get_evaluation_results('LSTM - Updated DS', lstm_predictions)
 # Results
 #-----------------------------------
 
+# Plotting the evaluation's predictions in comparison for with the tests and
+# training sets in one big plot containing all the methods
+lr_plot <- plot_predictions(eval_sets, lr_predictions, lr_train_predictions, legend_pos = 'right')
+legend <- get_legend(lr_plot)
+
+plot_grid(
+  plot_grid(
+    plot_predictions(eval_sets, lr_predictions, lr_train_predictions, legend_pos = 'none'),
+    #lr_plot,
+    plot_predictions(eval_sets, gam_predictions, gam_train_predictions, legend_pos = 'none'),
+    plot_predictions(eval_sets, svm_predictions, svm_train_predictions, legend_pos = 'none'),
+    plot_predictions(eval_sets, arima_predictions, legend_pos = 'none'),
+    plot_predictions(eval_sets, prophet_predictions, prophet_train_predictions, legend_pos = 'none'),
+    plot_predictions(eval_sets, lstm_predictions, lstm_train_predictions, legend_pos = 'none'),
+    plot_predictions(eval_sets, lstm_daily_predictions, lstm_train_predictions, legend_pos = 'none'),
+    ncol = 1,
+    labels = c('LR', 'GAM', 'SVM', 'ARIMA', 'Prophet', 'LSTM', 'LSTM - Updated DS')),
+  legend,
+  ncol = 2,  rel_widths = c(1, .4))
+
+rm(lr_plot, legend)
+
+
+# Displaying the results by RMSE
 results %>% spread('Number of trading days ahead', 'RMSE')
 
 # This is the function to do the benchmarking of the results
@@ -1017,16 +1042,3 @@ benchmark_against_linear_regression <- function(results) {
 # Benchmarking against linear regression
 benchmark_against_linear_regression(results) %>%
   spread('Number of trading days ahead', 'Improvement Ratio')
-
-
-grid.arrange(
-  plot_predictions(eval_sets, lr_predictions, lr_train_predictions),
-  plot_predictions(eval_sets, gam_predictions, gam_train_predictions),
-  plot_predictions(eval_sets, svm_predictions, svm_train_predictions),
-  plot_predictions(eval_sets, arima_predictions),
-  plot_predictions(eval_sets, prophet_predictions, prophet_train_predictions),
-  plot_predictions(eval_sets, lstm_predictions, lstm_train_predictions),
-  plot_predictions(eval_sets, lstm_daily_predictions, lstm_train_predictions),
-  ncol = 1)
-  
-  
