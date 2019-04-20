@@ -220,7 +220,7 @@ dow_jones_historical_records %>%
   scale_color_manual(values = c('black', 'gray')) +
   scale_size_manual(values = c(0.5, 0.25)) +
   labs(colour = '') +
-  theme(legend.position = 'bottom') +
+  theme(legend.position = 'top') +
   guides(size = FALSE)
 
 # Plotting the correlations among the stoks and the DJIA as a matrix heat-map
@@ -234,16 +234,15 @@ dow_jones_historical_records %>%
 
 # Plotting the most, least and non correlated stocks against the DJIA
 dow_jones_historical_records %>%
-  filter(symbol == djia_symbol | symbol == 'CAT' | symbol == 'WBA' | symbol == 'UNH') %>%
+  filter(symbol == djia_symbol | symbol == 'CAT' | symbol == 'WBA' | symbol == 'CVX') %>%
   mutate(index = ifelse(symbol == djia_symbol, 'DJIA', 'Dow Jones stock')) %>%
   ggplot(aes(x = date, y = close, group = symbol, color = symbol, size = index)) +
   geom_line() +
-  scale_color_manual(values = c(DIA='black', CAT='red', WBA='blue', UNH='gray')) +
+  scale_color_manual(values = c(DIA='black', CAT='red', WBA='blue', CVX='gray')) +
   scale_size_manual(values = c(0.5, 0.25)) +
   labs(colour = '') +
   theme(legend.position = 'none') +
   geom_dl(aes(label = symbol, color = symbol), method = 'last.polygons')
-
 
 
 #-----------------------------------
@@ -1042,3 +1041,29 @@ benchmark_against_linear_regression <- function(results) {
 # Benchmarking against linear regression
 benchmark_against_linear_regression(results) %>%
   spread('Number of trading days ahead', 'Improvement Ratio')
+
+
+
+#------------------------------------------------------
+# Example of usage of Prophet to predict stock closing
+# prices in a given date dange
+#------------------------------------------------------
+
+# Performing the prediction for tomorrow or next trading day
+prophet_forecaster$predict(from_date = as.Date('2019-04-22', '%Y-%m-%d'),
+                           to_date = as.Date('2019-04-26', '%Y-%m-%d'))
+
+
+#----------------------------------------------------------
+# Example of usage of LSTM when daily updating the dataset
+# and performing prediction for the next trading day
+#-----------------------------------------------------------
+
+# Updating the dataset (ideally to be done at the end of the day)
+load(file = dow_jones_dataframe_filename)
+dow_jones_historical_records <- update_dow_jones_dataframe(dow_jones_historical_records)
+save(dow_jones_historical_records, file = dow_jones_dataframe_filename)
+
+# Performing the prediction for tomorrow or next trading day
+lstm_forecaster$predict(from_date = get_trading_days_after(Sys.Date(), 1)$date[1],
+                        base_dataset = dow_jones_historical_records)
