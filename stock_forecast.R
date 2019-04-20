@@ -3,15 +3,21 @@
 #-----------------------------------
 
 # Installing that required packages that are not jet installed
+
+if(!require(tidyr)) install.packages('tidyr')
+if(!require(dplyr)) install.packages('dplyr')
+if(!require(data.table)) install.packages('data.table')
+if(!require(lubridate)) install.packages('lubridate')
+if(!require(ggplot2)) install.packages('ggplot2')
 if(!require(tidyverse)) install.packages('tidyverse')
-if(!require(httr)) install.packages('httr')
-if(!require(jsonlite)) install.packages('jsonlite')
 if(!require(ggcorrplot)) install.packages('ggcorrplot')
 if(!require(cowplot)) install.packages('cowplot')
 if(!require(directlabels)) install.packages('directlabels')
-if(!require(caret)) install.packages('caret')
-if(!require(mgcv)) install.packages('mgcv')
+if(!require(httr)) install.packages('httr')
+if(!require(jsonlite)) install.packages('jsonlite')
 if(!require(kernlab)) install.packages('kernlab')
+if(!require(mgcv)) install.packages('mgcv')
+if(!require(caret)) install.packages('caret')
 if(!require(nlme)) install.packages('nlme')
 if(!require(forecast)) install.packages('forecast')
 if(!require(prophet)) install.packages('prophet')
