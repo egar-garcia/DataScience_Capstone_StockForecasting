@@ -248,7 +248,7 @@ dow_jones_historical_records %>%
   scale_size_manual(values = c(0.5, 0.25)) +
   labs(colour = '') +
   theme(legend.position = 'none') +
-  geom_dl(aes(label = symbol, color = symbol), method = 'last.polygons')
+  geom_dl(aes(label = symbol, color = symbol), method = 'smart.grid')
 
 
 #-----------------------------------
@@ -953,7 +953,7 @@ svm_train_predictions <- svm_forecaster$predict(eval_training_start, eval_traini
 
 plot_predictions(eval_sets, svm_predictions, svm_train_predictions)
 
-get_evaluation_results('SVM', gam_predictions)
+get_evaluation_results('SVM', svm_predictions)
 
 
 # Evaluation of ARIMA
@@ -999,7 +999,7 @@ lstm_daily_predictions <- lstm_forecaster$predict(eval_test_start, eval_test_end
 
 plot_predictions(eval_sets, lstm_daily_predictions, lstm_train_predictions)
 
-get_evaluation_results('LSTM - Updated DS', lstm_predictions)
+get_evaluation_results('LSTM - Updated DS', lstm_daily_predictions)
 
 
 #-----------------------------------
@@ -1056,8 +1056,8 @@ benchmark_against_linear_regression(results) %>%
 #------------------------------------------------------
 
 # Performing the prediction for tomorrow or next trading day
-prophet_forecaster$predict(from_date = as.Date('2019-04-22', '%Y-%m-%d'),
-                           to_date = as.Date('2019-04-26', '%Y-%m-%d'))
+prophet_forecaster$predict(from_date = as.Date('2019-04-30', '%Y-%m-%d'),
+                           to_date = as.Date('2019-05-06', '%Y-%m-%d'))
 
 
 #----------------------------------------------------------
